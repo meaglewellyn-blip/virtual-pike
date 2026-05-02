@@ -29,6 +29,7 @@
   // ─── Module state ─────────────────────────────────────────────────────────────
 
   let activeFilter = 'all';
+  let _shortcutWired = false;
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -710,21 +711,25 @@
   // ─── Init ─────────────────────────────────────────────────────────────────────
 
   function init() {
-    document.addEventListener('keydown', (e) => {
-      if (e.key !== 'b' && e.key !== 'B') return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const tag = document.activeElement?.tagName?.toLowerCase();
-      if (tag && ['input', 'textarea', 'select'].includes(tag)) return;
-      if (document.activeElement?.isContentEditable) return;
-      const modal = document.getElementById('pike-modal');
-      if (modal && !modal.hidden) return;
-      location.hash = '#braindump';
-      if (global.Pike.router) global.Pike.router.activate('braindump');
-      setTimeout(() => {
-        const input = document.getElementById('braindump-input');
-        if (input) input.focus();
-      }, 60);
-    });
+    // Wire keyboard shortcut once only — this function is called on every state change
+    if (!_shortcutWired) {
+      _shortcutWired = true;
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'b' && e.key !== 'B') return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        const tag = document.activeElement?.tagName?.toLowerCase();
+        if (tag && ['input', 'textarea', 'select'].includes(tag)) return;
+        if (document.activeElement?.isContentEditable) return;
+        const modal = document.getElementById('pike-modal');
+        if (modal && !modal.hidden) return;
+        location.hash = '#braindump';
+        if (global.Pike.router) global.Pike.router.activate('braindump');
+        setTimeout(() => {
+          const input = document.getElementById('braindump-input');
+          if (input) input.focus();
+        }, 60);
+      });
+    }
 
     // ── One-time media import (flag: brainDumpImportV1) ──────────────────────────
     if (!global.Pike.state.data.brainDumpImportV1) {

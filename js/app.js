@@ -222,7 +222,7 @@
       if (Pike.travel) Pike.travel.render();
       if (Pike.people) { Pike.people.init(); Pike.people.render(); }
       if (Pike.tasks) Pike.tasks.render();
-      if (Pike.braindump) Pike.braindump.render();
+      if (Pike.braindump) { Pike.braindump.init(); Pike.braindump.render(); }
       if (Pike.quotes) { Pike.quotes.init(); Pike.quotes.render(); Pike.quotes.renderLibrary(); }
       if (Pike.gcal) Pike.gcal.render();
     });
