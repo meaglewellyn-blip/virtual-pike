@@ -15,6 +15,10 @@
   // =======================
 
   const PUSH_DEBOUNCE_MS = 600;
+  // Window during which incoming realtime broadcasts are ignored after a
+  // local commit. Prevents a stale broadcast (e.g. queued from an earlier
+  // server change) from clobbering an edit the user just made.
+  const REALTIME_IGNORE_AFTER_LOCAL_COMMIT_MS = 4000;
 
   let client = null;
   let pushTimer = null;
@@ -84,12 +88,16 @@
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'app_state', filter: `id=eq.${rowId}` },
         (payload) => {
-          if (payload && payload.new && payload.new.data) {
-            const incoming = JSON.stringify(payload.new.data);
-            if (incoming !== lastPushedJson) {
-              global.Pike.state.replace(payload.new.data);
-            }
-          }
+          if (!payload || !payload.new || !payload.new.data) return;
+          const incoming = JSON.stringify(payload.new.data);
+          // Echo of our own push — already represented in state.
+          if (incoming === lastPushedJson) return;
+          // The user has unsaved/in-flight local edits; the broadcast might be
+          // stale (e.g. queued from an earlier server change). Ignore it. Once
+          // the local edit settles and we push, the next broadcast will reconcile.
+          const sinceLocal = Date.now() - (global.Pike.state.lastLocalCommitAt || 0);
+          if (sinceLocal < REALTIME_IGNORE_AFTER_LOCAL_COMMIT_MS) return;
+          global.Pike.state.replace(payload.new.data);
         })
       .subscribe();
   }

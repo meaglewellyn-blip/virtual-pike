@@ -71,12 +71,16 @@
     data: loadFromLocal() || defaultState(),
     rowId: ROW_ID,
     storageKey: STORAGE_KEY,
+    // Tracks the last time we made a local change. Used by db.js to ignore
+    // stale realtime broadcasts that would otherwise stomp on in-flight edits.
+    lastLocalCommitAt: 0,
 
     // Mutate state, save locally, push to remote, broadcast change.
     commit(mutator) {
       if (typeof mutator === 'function') {
         mutator(state.data);
       }
+      state.lastLocalCommitAt = Date.now();
       saveToLocal(state.data);
       emit();
       if (global.Pike && global.Pike.db && typeof global.Pike.db.schedulePush === 'function') {
