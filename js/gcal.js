@@ -13,7 +13,8 @@
 
   const Pike = global.Pike || (global.Pike = {});
 
-  const EDGE_URL = 'https://oenxkfheadicpixkywtz.supabase.co/functions/v1/gcal-proxy';
+  const EDGE_URL  = 'https://oenxkfheadicpixkywtz.supabase.co/functions/v1/gcal-proxy';
+  const ANON_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9lbnhrZmhlYWRpY3BpeGt5d3R6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MDYzMzEsImV4cCI6MjA5MzI4MjMzMX0.bfVyJ0ysEoKn8Dr0suDAN1ftrJ6uq4JncIoK8FdFBtM';
 
   const SOURCES = {
     personal: { label: 'Personal', color: '#9b87d1' },
@@ -24,7 +25,9 @@
   async function callEdge(params) {
     const url = new URL(EDGE_URL);
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-    const res = await fetch(url.toString());
+    const res = await fetch(url.toString(), {
+      headers: { 'Authorization': `Bearer ${ANON_KEY}` },
+    });
     if (!res.ok && res.status !== 401) throw new Error(`Edge error ${res.status}`);
     return res.json();
   }
