@@ -148,8 +148,7 @@
   align-items: center;
 }
 
-.week-item.is-gcal[data-source="personal"] { border-left: 2.5px solid var(--accent); }
-.week-item.is-gcal[data-source="work"]     { border-left: 2.5px solid var(--sage); }
+/* Left border removed — right-side source label is sufficient */
 
 /* Source label — plain text at far right, no border or background */
 .week-gcal-src {

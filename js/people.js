@@ -335,13 +335,13 @@
       .map((n) => `<option value="${n}" ${person.stepWork?.currentStep === n ? 'selected':''}>${n}</option>`)
       .join('');
 
-    const recentLog = (person.contactLog || []).slice(0, 5);
-    const logHTML = recentLog.length
-      ? recentLog.map((e) => `
+    const fullLog = (person.contactLog || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const logHTML = fullLog.length
+      ? fullLog.map((e) => `
           <div class="person-log-entry">
-            <span class="person-log-type">${esc(e.type)}</span>
             <span class="person-log-date">${esc(e.date)}</span>
-            ${e.note ? `<div class="person-log-note">${esc(e.note)}</div>` : ''}
+            <span class="person-log-type">${esc(e.type)}</span>
+            ${e.note ? `<span class="person-log-note">${esc(e.note)}</span>` : ''}
           </div>`).join('')
       : `<p class="person-log-empty">No contact logged yet.</p>`;
 
@@ -430,11 +430,12 @@
         </div>
       </div>
 
-      ${recentLog.length ? `
       <div class="person-modal-section">
-        <div class="person-modal-section-title">Recent</div>
-        ${logHTML}
-      </div>` : ''}
+        <div class="person-modal-section-title">Contact history</div>
+        <div class="person-log-history">
+          ${logHTML}
+        </div>
+      </div>
 
       <div class="pike-modal-actions">
         <button type="button" class="btn" data-modal-close="1">Close</button>

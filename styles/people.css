@@ -197,36 +197,57 @@
   flex-wrap: wrap;
 }
 
-/* Contact log entries */
+/* Contact log history */
+.person-log-history {
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.person-log-history:empty { display: none; }
+
 .person-log-entry {
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-  border-bottom: 1px dashed var(--line-soft);
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line-soft);
   font-size: var(--fs-sm);
+  flex-wrap: wrap;
 }
 
 .person-log-entry:last-child { border-bottom: none; }
 
+/* Date — leftmost, fixed width so columns line up */
+.person-log-date {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 82px;
+}
+
+/* Type — capitalized, medium weight */
 .person-log-type {
   text-transform: capitalize;
   font-weight: var(--fw-medium);
   color: var(--text);
+  flex-shrink: 0;
 }
 
-.person-log-date { color: var(--text-muted); }
-
+/* Note — inline, muted, italic */
 .person-log-note {
-  width: 100%;
   color: var(--text-muted);
   font-style: italic;
-  margin-top: 2px;
 }
 
 .person-log-empty {
   font-size: var(--fs-sm);
   color: var(--text-faint);
   margin: 0;
+  padding: var(--space-3);
 }
