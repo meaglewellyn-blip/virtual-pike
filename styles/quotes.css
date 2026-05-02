@@ -1,0 +1,129 @@
+/* Virtual Pike — Quotes library */
+
+/* ── Library grid ─────────────────────────────────────────────────────────── */
+
+#quotes-library {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.quotes-empty {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  font-style: italic;
+  padding: var(--space-4) 0;
+}
+
+/* ── Quote card ───────────────────────────────────────────────────────────── */
+
+.quote-card {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: var(--space-4);
+  align-items: start;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.quote-card:hover {
+  border-color: var(--line);
+}
+
+.quote-card-number {
+  font-size: var(--fs-xs);
+  font-family: var(--font-body);
+  color: var(--text-faint);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.04em;
+  padding-top: 3px;
+}
+
+.quote-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.quote-card-text {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-loose);
+  color: var(--text);
+  font-style: normal;
+}
+
+.quote-card-author {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-style: normal;
+  letter-spacing: 0.01em;
+}
+
+.quote-delete-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.quote-card:hover .quote-delete-btn {
+  opacity: 1;
+}
+
+.quote-delete-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* Show delete button on touch devices (no hover) */
+@media (hover: none) {
+  .quote-delete-btn { opacity: 0.45; }
+}
+
+/* ── Add modal ────────────────────────────────────────────────────────────── */
+
+.quote-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.quote-modal-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 100px;
+  line-height: var(--lh-loose);
+}
+
+/* ── Mobile ───────────────────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .quote-card {
+    grid-template-columns: 24px 1fr auto;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .quote-card-text {
+    font-size: var(--fs-base);
+  }
+
+  .quote-delete-btn {
+    opacity: 0.45;
+  }
+}

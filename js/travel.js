@@ -354,19 +354,19 @@
         <div class="trip-quantities-grid">
           <label class="trip-qty-field">
             <span>Days</span>
-            <input type="number" class="input trip-qty-input" name="days" min="0" value="${esc(details.days || 0)}">
+            <input type="number" inputmode="numeric" class="input trip-qty-input" name="days" min="0" value="${esc(details.days || 0)}">
           </label>
           <label class="trip-qty-field">
             <span>Nights</span>
-            <input type="number" class="input trip-qty-input" name="nights" min="0" value="${esc(details.nights || 0)}">
+            <input type="number" inputmode="numeric" class="input trip-qty-input" name="nights" min="0" value="${esc(details.nights || 0)}">
           </label>
           <label class="trip-qty-field">
             <span>Nights out</span>
-            <input type="number" class="input trip-qty-input" name="nightsOut" min="0" value="${esc(details.nightsOut || 0)}">
+            <input type="number" inputmode="numeric" class="input trip-qty-input" name="nightsOut" min="0" value="${esc(details.nightsOut || 0)}">
           </label>
           <label class="trip-qty-field">
             <span>Workout days</span>
-            <input type="number" class="input trip-qty-input" name="workoutDays" min="0" value="${esc(details.workoutDays || 0)}">
+            <input type="number" inputmode="numeric" class="input trip-qty-input" name="workoutDays" min="0" value="${esc(details.workoutDays || 0)}">
           </label>
         </div>
         <div class="trip-outfit-summary" id="trip-outfit-summary">
@@ -420,6 +420,7 @@
 
     // Quantity inputs → live recalculate
     container.querySelectorAll('.trip-qty-input').forEach((input) => {
+      input.addEventListener('focus', () => input.select());
       input.addEventListener('input', () => {
         const newDetails = {
           days:        parseInt(container.querySelector('[name="days"]').value)       || 0,

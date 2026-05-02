@@ -828,3 +828,60 @@
 .task-picker-add-today input[type="checkbox"] {
   flex-shrink: 0;
 }
+
+/* ── Mobile adjustments ─────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .today-greeting {
+    font-size: clamp(32px, 9vw, 48px);
+    margin-bottom: var(--space-1);
+  }
+
+  .today-subgreeting {
+    font-size: var(--fs-base);
+    margin-bottom: var(--space-5);
+  }
+
+  .today-anchor {
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .today-anchor-time {
+    font-size: clamp(36px, 10vw, 56px);
+  }
+
+  .today-anchor-text {
+    min-width: 0;      /* remove hard min-width so it wraps freely */
+    font-size: var(--fs-base);
+  }
+
+  .today-anchor-input {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .today-quote-card {
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .today-quote-text {
+    font-size: var(--fs-md);
+  }
+
+  /* People events + trip prep: tighten horizontal padding */
+  .today-people-events,
+  .today-trip-prep {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* Timeline: tighten the gutter so event titles have more room */
+  .today-timeline {
+    --gutter: 56px;
+  }
+
+  .today-timeline-wrap,
+  .today-tray {
+    padding: var(--space-4);
+  }
+}

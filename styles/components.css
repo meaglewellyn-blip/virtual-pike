@@ -145,7 +145,10 @@
 .quick-capture:hover { background: var(--surface-2); color: var(--text); transform: translateY(-1px); }
 
 @media (max-width: 720px) {
-  .quick-capture { bottom: 96px; right: var(--space-4); }
+  .quick-capture {
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    right: var(--space-4);
+  }
 }
 
 /* ===== Modal ===== */
@@ -158,6 +161,7 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-5);
+  padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
 }
 .pike-modal[hidden] { display: none; }
 

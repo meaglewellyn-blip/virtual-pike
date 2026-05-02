@@ -481,3 +481,19 @@
   color: var(--text-faint);
   font-style: italic;
 }
+
+/* ── Mobile ──────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .trip-supps-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .trip-detail-header {
+    flex-wrap: wrap;
+  }
+
+  .packing-cat-items {
+    gap: var(--space-1);
+  }
+}

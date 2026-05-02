@@ -84,6 +84,31 @@
   color: var(--text-faint);
 }
 
+/* ── Mobile: stack source rows ──────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .settings-card {
+    padding: var(--space-4);
+  }
+
+  .gcal-source-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding: var(--space-3) var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .gcal-source-info {
+    flex: 1 1 100%;
+  }
+
+  .gcal-source-btns {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
 /* ── Timeline: gcal event blocks ────────────────────────────────────────────── */
 
 .tl-block-gcal {
@@ -93,8 +118,8 @@
   cursor: default;
 }
 
-.tl-block-gcal[data-source="personal"] { border-color: #9b87d1; }
-.tl-block-gcal[data-source="work"]     { border-color: #5ba3b0; }
+.tl-block-gcal[data-source="personal"] { border-color: var(--accent); }
+.tl-block-gcal[data-source="work"]     { border-color: var(--sage); }
 
 .tl-block-gcal .tl-block-title {
   font-weight: var(--fw-normal);
@@ -112,32 +137,45 @@
   opacity: 0.7;
 }
 
-.tl-block-gcal[data-source="personal"] .tl-block-src-badge { color: #9b87d1; }
-.tl-block-gcal[data-source="work"]     .tl-block-src-badge { color: #5ba3b0; }
+.tl-block-gcal[data-source="personal"] .tl-block-src-badge { color: var(--accent-strong); }
+.tl-block-gcal[data-source="work"]     .tl-block-src-badge { color: var(--sage); }
 
 /* ── Week view: gcal items ──────────────────────────────────────────────────── */
 
 .week-item.is-gcal {
   opacity: 0.9;
+  gap: var(--space-2);
 }
 
-.week-item.is-gcal[data-source="personal"] { border-left: 2.5px solid #9b87d1; }
-.week-item.is-gcal[data-source="work"]     { border-left: 2.5px solid #5ba3b0; }
+.week-item.is-gcal[data-source="personal"] { border-left: 2.5px solid var(--accent); }
+.week-item.is-gcal[data-source="work"]     { border-left: 2.5px solid var(--sage); }
 
-.week-gcal-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+/* Source chip — small pill at far right of gcal items */
+.week-gcal-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-pill);
+  font-size: 9px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
   flex-shrink: 0;
-  margin-right: 2px;
-  vertical-align: middle;
+  margin-left: auto;
+  opacity: 0.8;
 }
 
-.week-item.is-gcal[data-source="personal"] .week-gcal-dot { background: #9b87d1; }
-.week-item.is-gcal[data-source="work"]     .week-gcal-dot { background: #5ba3b0; }
+.week-item.is-gcal[data-source="personal"] .week-gcal-chip {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.week-item.is-gcal[data-source="work"] .week-gcal-chip {
+  background: var(--sage-soft);
+  color: var(--sage);
+}
 
 .week-item.is-gcal.is-allday {
   font-style: italic;
-  opacity: 0.75;
+  opacity: 0.8;
 }

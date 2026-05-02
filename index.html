@@ -16,18 +16,19 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="styles/tokens.css">
-  <link rel="stylesheet" href="styles/base.css">
-  <link rel="stylesheet" href="styles/components.css">
-  <link rel="stylesheet" href="styles/sidebar.css">
-  <link rel="stylesheet" href="styles/today.css?v=3">
-  <link rel="stylesheet" href="styles/week.css">
-  <link rel="stylesheet" href="styles/rhythms.css">
-  <link rel="stylesheet" href="styles/travel.css">
+  <link rel="stylesheet" href="styles/tokens.css?v=2">
+  <link rel="stylesheet" href="styles/base.css?v=2">
+  <link rel="stylesheet" href="styles/components.css?v=2">
+  <link rel="stylesheet" href="styles/sidebar.css?v=2">
+  <link rel="stylesheet" href="styles/today.css?v=4">
+  <link rel="stylesheet" href="styles/week.css?v=2">
+  <link rel="stylesheet" href="styles/rhythms.css?v=2">
+  <link rel="stylesheet" href="styles/travel.css?v=2">
   <link rel="stylesheet" href="styles/people.css">
   <link rel="stylesheet" href="styles/tasks.css">
   <link rel="stylesheet" href="styles/braindump.css">
-  <link rel="stylesheet" href="styles/gcal.css">
+  <link rel="stylesheet" href="styles/gcal.css?v=2">
+  <link rel="stylesheet" href="styles/quotes.css?v=1">
   <link rel="stylesheet" href="styles/auth.css">
 </head>
 <body class="pike-locked">
@@ -202,13 +203,9 @@
         <section id="section-quotes" class="section">
           <header class="section-header">
             <h1>Quotes</h1>
-            <span class="section-meta">Phase 8</span>
+            <button id="quotes-add-btn" class="btn btn-ghost btn-sm" type="button">+ Add</button>
           </header>
-          <div class="placeholder-card">
-            <div class="placeholder-eyebrow">Coming soon</div>
-            <h3>A small library of what moves you</h3>
-            <p>One quote on Today each morning. The full library lives here — paste and tag what you love.</p>
-          </div>
+          <div id="quotes-library"></div>
         </section>
 
         <!-- SETTINGS -->
@@ -264,16 +261,16 @@
   <script src="js/db.js?v=2"></script>
   <script src="js/modal.js?v=2"></script>
   <script src="js/recurrence.js?v=2"></script>
-  <script src="js/today.js?v=3"></script>
-  <script src="js/week.js?v=2"></script>
+  <script src="js/today.js?v=4"></script>
+  <script src="js/week.js?v=3"></script>
   <script src="js/rhythms.js?v=2"></script>
-  <script src="js/travel.js?v=2"></script>
+  <script src="js/travel.js?v=3"></script>
   <script src="js/people.js?v=2"></script>
   <script src="js/tasks.js?v=2"></script>
   <script src="js/braindump.js?v=1"></script>
-  <script src="js/quotes.js?v=2"></script>
-  <script src="js/gcal.js?v=2"></script>
+  <script src="js/quotes.js?v=3"></script>
+  <script src="js/gcal.js?v=3"></script>
   <script src="js/weather.js?v=2"></script>
-  <script src="js/app.js?v=2"></script>
+  <script src="js/app.js?v=3"></script>
 </body>
 </html>

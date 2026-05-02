@@ -203,7 +203,7 @@
     if (Pike.people) Pike.people.render();
     if (Pike.tasks) Pike.tasks.render();
     if (Pike.braindump) Pike.braindump.render();
-    if (Pike.quotes) Pike.quotes.render();
+    if (Pike.quotes) { Pike.quotes.render(); Pike.quotes.initLibrary(); }
     if (Pike.gcal) Pike.gcal.render();
     if (Pike.weather) Pike.weather.load();
 
@@ -223,7 +223,7 @@
       if (Pike.people) { Pike.people.init(); Pike.people.render(); }
       if (Pike.tasks) Pike.tasks.render();
       if (Pike.braindump) Pike.braindump.render();
-      if (Pike.quotes) { Pike.quotes.init(); Pike.quotes.render(); }
+      if (Pike.quotes) { Pike.quotes.init(); Pike.quotes.render(); Pike.quotes.renderLibrary(); }
       if (Pike.gcal) Pike.gcal.render();
     });
 

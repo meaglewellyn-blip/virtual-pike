@@ -17,8 +17,8 @@
   const ANON_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9lbnhrZmhlYWRpY3BpeGt5d3R6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MDYzMzEsImV4cCI6MjA5MzI4MjMzMX0.bfVyJ0ysEoKn8Dr0suDAN1ftrJ6uq4JncIoK8FdFBtM';
 
   const SOURCES = {
-    personal: { label: 'Personal', color: '#9b87d1' },
-    work:     { label: 'Work',     color: '#5ba3b0' },
+    personal: { label: 'Personal', color: '#C9A6A1' },
+    work:     { label: 'Work',     color: '#A8B4A0' },
   };
 
   // ── Edge Function helper ────────────────────────────────────────────────────

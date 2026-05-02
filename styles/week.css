@@ -182,3 +182,41 @@
 .week-item.is-rhythm-unplanned:hover {
   opacity: 0.8;
 }
+
+/* ── Mobile ───────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .week-nav {
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .week-range {
+    min-width: 90px;
+    font-size: var(--fs-xs);
+  }
+
+  #week-review-btn {
+    font-size: var(--fs-xs);
+  }
+
+  .week-review-card {
+    padding: var(--space-4);
+  }
+
+  .week-day-body {
+    padding: var(--space-2) var(--space-3) var(--space-2);
+  }
+
+  .week-item {
+    font-size: var(--fs-xs);
+  }
+
+  .week-item-time {
+    min-width: 50px;
+  }
+
+  .week-rhythm-done-btn {
+    opacity: 0.5;
+  }
+}
