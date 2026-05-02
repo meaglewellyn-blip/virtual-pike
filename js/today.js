@@ -368,11 +368,11 @@
       <div class="row" style="gap: var(--space-3);">
         <label style="flex:1;">
           <span>Start</span>
-          <input type="time" class="input" name="start" step="900" required value="${escapeAttr(initial.start)}">
+          <input type="time" class="input" name="start" step="60" required value="${escapeAttr(initial.start)}">
         </label>
         <label style="flex:1;">
           <span>End</span>
-          <input type="time" class="input" name="end" step="900" required value="${escapeAttr(initial.end)}">
+          <input type="time" class="input" name="end" step="60" required value="${escapeAttr(initial.end)}">
         </label>
       </div>
       <div class="pike-modal-actions">
@@ -465,7 +465,7 @@
       ${isEdit ? `
       <label>
         <span>Scheduled time today (optional)</span>
-        <input type="time" class="input" name="scheduledStart" step="900" value="${escapeAttr(initial.scheduledStart || '')}">
+        <input type="time" class="input" name="scheduledStart" step="60" value="${escapeAttr(initial.scheduledStart || '')}">
       </label>
       <label class="row" style="flex-direction: row; gap: var(--space-2); align-items: center;">
         <input type="checkbox" name="completed" ${initial.completedAt ? 'checked' : ''}>
