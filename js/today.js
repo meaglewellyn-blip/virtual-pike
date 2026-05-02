@@ -127,11 +127,16 @@
     track.className = 'tl-track';
     root.appendChild(track);
 
-    // Workday-start marker
+    // Workday-start marker (skipped on weekends unless an override exists)
     const data = getData();
     const tk = todayKey();
     const override = (data.dailyOverrides || {})[tk] || null;
-    const workdayStart = (override && override.workdayStart) || data.settings.defaultWorkdayStart;
+    const hasOverride = !!(override && override.workdayStart);
+    const todayDate = new Date();
+    const isWknd = todayDate.getDay() === 0 || todayDate.getDay() === 6;
+    const workdayStart = hasOverride
+      ? override.workdayStart
+      : (isWknd ? null : data.settings.defaultWorkdayStart);
     const wsMin = parseHHMM(workdayStart);
     if (wsMin != null && wsMin >= startMin && wsMin <= endMin) {
       const ws = document.createElement('div');

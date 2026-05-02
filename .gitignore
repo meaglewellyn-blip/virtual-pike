@@ -8,3 +8,4 @@ node_modules/
 
 # Source data (kept locally, not in the public repo)
 Tasks.xlsx
+.workout-split.md

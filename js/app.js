@@ -55,6 +55,15 @@
     return 'Quiet night';
   }
 
+  function isWeekend(d) {
+    const day = d.getDay();
+    return day === 0 || day === 6;
+  }
+
+  function weekendDayName(d) {
+    return d.getDay() === 6 ? 'Saturday' : 'Sunday';
+  }
+
   function renderTodayPlaceholder() {
     const data = Pike.state.data;
     const now = new Date();
@@ -65,6 +74,7 @@
     const timeEl  = document.getElementById('today-anchor-time');
     const textEl  = document.getElementById('today-anchor-text');
     const inputEl = document.getElementById('today-workday-start');
+    const inputLabel = document.querySelector('.today-anchor-input label[for="today-workday-start"]');
 
     if (greetEl) greetEl.textContent = greeting(now) + '.';
     if (subEl) {
@@ -74,12 +84,26 @@
     if (timeEl) timeEl.textContent = fmtTime(now);
 
     const override = (data.dailyOverrides && data.dailyOverrides[key]) || null;
-    const workdayStart = (override && override.workdayStart) || data.settings.defaultWorkdayStart;
+    const hasOverride = !!(override && override.workdayStart);
+    const weekend = isWeekend(now);
 
-    if (inputEl) inputEl.value = workdayStart;
+    // On weekends, skip the default workday — only honor an explicit override.
+    const workdayStart = hasOverride
+      ? override.workdayStart
+      : (weekend ? null : data.settings.defaultWorkdayStart);
+
+    if (inputEl) inputEl.value = workdayStart || '';
+    if (inputLabel) {
+      inputLabel.textContent = weekend && !hasOverride
+        ? 'Working today? Set a start time'
+        : 'Starting work today at';
+    }
 
     if (textEl) {
-      if (!workdayStart) {
+      if (weekend && !hasOverride) {
+        const dayName = weekendDayName(now);
+        textEl.innerHTML = `It's <strong>${dayName}</strong> — open hours, no workday on the books.`;
+      } else if (!workdayStart) {
         textEl.innerHTML = `Set a workday start time below to see how much open time you have.`;
       } else {
         const mins = minutesUntil(workdayStart, now);
