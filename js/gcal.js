@@ -31,10 +31,14 @@
 
   // ── Connect: open Google OAuth popup ───────────────────────────────────────
   function connect(source) {
+    // Open the popup synchronously on the click event so browsers allow it.
+    // Then navigate it to the Google URL once the Edge Function responds.
+    const popup = window.open('', 'gcal-auth', 'width=520,height=640,left=200,top=100');
+
     callEdge({ action: 'auth-url', source })
       .then(({ url }) => {
-        if (!url) return;
-        const popup = window.open(url, 'gcal-auth', 'width=520,height=640,left=200,top=100');
+        if (!url) { popup?.close(); return; }
+        popup.location.href = url;
 
         // Listen for postMessage from the success page
         function onMessage(e) {
@@ -55,7 +59,7 @@
           }
         }, 1000);
       })
-      .catch((e) => console.warn('Pike: gcal connect error', e));
+      .catch((e) => { popup?.close(); console.warn('Pike: gcal connect error', e); });
   }
 
   // ── Disconnect ──────────────────────────────────────────────────────────────
