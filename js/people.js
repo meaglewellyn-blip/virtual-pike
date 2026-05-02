@@ -193,13 +193,17 @@
     }
   }
 
-  function logContact(personId, type, note) {
+  function logContact(personId, type, note, date) {
+    const chosenDate = date || todayKey();
     global.Pike.state.commit((d) => {
       const p = (d.people || []).find((x) => x.id === personId);
       if (!p) return;
       p.contactLog = p.contactLog || [];
-      p.contactLog.unshift({ id: uid('log'), date: todayKey(), type, note: note || '' });
-      p.lastContactAt = todayKey();
+      p.contactLog.unshift({ id: uid('log'), date: chosenDate, type, note: note || '' });
+      // Only advance lastContactAt — never roll it back for older retroactive entries
+      if (!p.lastContactAt || chosenDate >= p.lastContactAt) {
+        p.lastContactAt = chosenDate;
+      }
     });
   }
 
@@ -408,6 +412,10 @@
             <option value="text">Text</option>
             <option value="check-in">Check-in</option>
           </select>
+          <input type="date" class="input" name="contactDate"
+            value="${todayKey()}" style="flex:0 0 140px">
+        </div>
+        <div class="person-log-row" style="margin-top:var(--space-2)">
           <input type="text" class="input" name="contactNote"
             placeholder="Quick note (optional)" maxlength="200" style="flex:1">
           <button type="button" class="btn btn-primary btn-sm" id="ppl-log-btn">Log</button>
@@ -437,7 +445,8 @@
     form.querySelector('#ppl-log-btn').addEventListener('click', () => {
       const type = form.querySelector('[name="contactType"]').value;
       const note = form.querySelector('[name="contactNote"]').value.trim();
-      logContact(personId, type, note);
+      const date = form.querySelector('[name="contactDate"]').value || todayKey();
+      logContact(personId, type, note, date);
       global.Pike.modal.close();
     });
 

@@ -131,8 +131,8 @@
       let itemsHTML = '';
 
       for (const ev of gcalAllDay) {
-        const chip = `<span class="week-gcal-chip">${ev.source === 'work' ? 'W' : 'P'}</span>`;
-        itemsHTML += `<div class="week-item is-gcal is-allday" data-source="${esc(ev.source || '')}"><span class="week-item-title">${esc(ev.title)}</span>${chip}</div>`;
+        const src = `<span class="week-gcal-src">${ev.source === 'work' ? 'Work' : 'Personal'}</span>`;
+        itemsHTML += `<div class="week-item is-gcal is-allday" data-source="${esc(ev.source || '')}"><span class="week-item-title">${esc(ev.title)}</span>${src}</div>`;
       }
       for (const ev of events) {
         const time = ev.start ? `<span class="week-item-time">${esc(fmtTime(ev.start))}</span>` : '';
@@ -140,8 +140,8 @@
       }
       for (const ev of gcalTimed) {
         const time = ev.start ? `<span class="week-item-time">${esc(fmtTime(ev.start))}</span>` : '';
-        const chip = `<span class="week-gcal-chip">${ev.source === 'work' ? 'W' : 'P'}</span>`;
-        itemsHTML += `<div class="week-item is-gcal" data-source="${esc(ev.source || '')}">${time}<span class="week-item-title">${esc(ev.title)}</span>${chip}</div>`;
+        const src  = `<span class="week-gcal-src">${ev.source === 'work' ? 'Work' : 'Personal'}</span>`;
+        itemsHTML += `<div class="week-item is-gcal" data-source="${esc(ev.source || '')}">${time}<span class="week-item-title">${esc(ev.title)}</span>${src}</div>`;
       }
       for (const t of tasks) {
         const time = t.scheduledStart ? `<span class="week-item-time">${esc(fmtTime(t.scheduledStart))}</span>` : '';

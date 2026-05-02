@@ -145,35 +145,28 @@
 .week-item.is-gcal {
   opacity: 0.9;
   gap: var(--space-2);
+  align-items: center;
 }
 
 .week-item.is-gcal[data-source="personal"] { border-left: 2.5px solid var(--accent); }
 .week-item.is-gcal[data-source="work"]     { border-left: 2.5px solid var(--sage); }
 
-/* Source chip — small pill at far right of gcal items */
-.week-gcal-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: var(--radius-pill);
+/* Source label — plain text at far right, no border or background */
+.week-gcal-src {
   font-size: 9px;
-  font-weight: var(--fw-semibold);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: var(--fw-medium);
   flex-shrink: 0;
   margin-left: auto;
-  opacity: 0.8;
+  padding-left: var(--space-3);
+  opacity: 0.65;
+  line-height: 1;
+  align-self: center;
 }
 
-.week-item.is-gcal[data-source="personal"] .week-gcal-chip {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-}
-.week-item.is-gcal[data-source="work"] .week-gcal-chip {
-  background: var(--sage-soft);
-  color: var(--sage);
-}
+.week-item.is-gcal[data-source="personal"] .week-gcal-src { color: var(--accent-strong); }
+.week-item.is-gcal[data-source="work"]     .week-gcal-src { color: var(--sage); }
 
 .week-item.is-gcal.is-allday {
   font-style: italic;
