@@ -197,6 +197,53 @@
   flex-wrap: wrap;
 }
 
+/* ── Contact log delete button ──────────────────────────────────────────────── */
+
+.person-log-delete-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-faint);
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  cursor: pointer;
+}
+
+.person-log-entry:hover .person-log-delete-btn {
+  opacity: 1;
+}
+
+.person-log-delete-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* Confirm state — text expands to "Remove?" */
+.person-log-delete-btn.is-confirming {
+  width: auto;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.03em;
+  opacity: 1;
+}
+
+/* Always show on touch devices */
+@media (hover: none) {
+  .person-log-delete-btn { opacity: 0.4; }
+}
+
 /* Contact log history */
 .person-log-history {
   display: flex;

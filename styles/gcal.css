@@ -150,22 +150,29 @@
 
 /* Left border removed — right-side source label is sufficient */
 
-/* Source label — plain text at far right, no border or background */
+/* Source chip — soft tinted pill, right-aligned */
 .week-gcal-src {
   font-size: 9px;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   font-weight: var(--fw-medium);
   flex-shrink: 0;
   margin-left: auto;
-  padding-left: var(--space-3);
-  opacity: 0.65;
-  line-height: 1;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  line-height: 1.6;
   align-self: center;
+  white-space: nowrap;
 }
 
-.week-item.is-gcal[data-source="personal"] .week-gcal-src { color: var(--accent-strong); }
-.week-item.is-gcal[data-source="work"]     .week-gcal-src { color: var(--sage); }
+.week-item.is-gcal[data-source="personal"] .week-gcal-src {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+.week-item.is-gcal[data-source="work"] .week-gcal-src {
+  color: var(--sage);
+  background: var(--sage-soft);
+}
 
 .week-item.is-gcal.is-allday {
   font-style: italic;

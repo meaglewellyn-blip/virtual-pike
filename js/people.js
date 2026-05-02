@@ -207,6 +207,19 @@
     });
   }
 
+  function deleteContactLogEntry(personId, logId) {
+    global.Pike.state.commit((d) => {
+      const p = (d.people || []).find((x) => x.id === personId);
+      if (!p) return;
+      p.contactLog = (p.contactLog || []).filter((e) => e.id !== logId);
+      // Recalculate lastContactAt from the remaining entries
+      const remaining = (p.contactLog || []).filter((e) => e.date);
+      p.lastContactAt = remaining.length
+        ? remaining.reduce((max, e) => e.date > max ? e.date : max, remaining[0].date)
+        : null;
+    });
+  }
+
   function savePerson(personId, updates) {
     global.Pike.state.commit((d) => {
       const p = (d.people || []).find((x) => x.id === personId);
@@ -335,16 +348,6 @@
       .map((n) => `<option value="${n}" ${person.stepWork?.currentStep === n ? 'selected':''}>${n}</option>`)
       .join('');
 
-    const fullLog = (person.contactLog || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    const logHTML = fullLog.length
-      ? fullLog.map((e) => `
-          <div class="person-log-entry">
-            <span class="person-log-date">${esc(e.date)}</span>
-            <span class="person-log-type">${esc(e.type)}</span>
-            ${e.note ? `<span class="person-log-note">${esc(e.note)}</span>` : ''}
-          </div>`).join('')
-      : `<p class="person-log-empty">No contact logged yet.</p>`;
-
     const form = document.createElement('form');
     form.className = 'person-modal-form';
     form.innerHTML = `
@@ -432,9 +435,7 @@
 
       <div class="person-modal-section">
         <div class="person-modal-section-title">Contact history</div>
-        <div class="person-log-history">
-          ${logHTML}
-        </div>
+        <div class="person-log-history" id="person-log-hist"></div>
       </div>
 
       <div class="pike-modal-actions">
@@ -442,6 +443,48 @@
         <button type="submit" class="btn btn-primary">Save</button>
       </div>
     `;
+
+    // ── Live-rendered contact history ────────────────────────────────────────
+    function refreshLog() {
+      const histEl = form.querySelector('#person-log-hist');
+      if (!histEl) return;
+      const p = (global.Pike.state.data.people || []).find((x) => x.id === personId);
+      const log = ((p?.contactLog) || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+      if (!log.length) {
+        histEl.innerHTML = `<p class="person-log-empty">No contact logged yet.</p>`;
+        return;
+      }
+
+      histEl.innerHTML = log.map((e) => `
+        <div class="person-log-entry">
+          <span class="person-log-date">${esc(e.date)}</span>
+          <span class="person-log-type">${esc(e.type)}</span>
+          ${e.note ? `<span class="person-log-note">${esc(e.note)}</span>` : ''}
+          <button class="person-log-delete-btn" data-log-id="${esc(e.id)}"
+            type="button" aria-label="Delete this entry">×</button>
+        </div>`).join('');
+
+      histEl.querySelectorAll('.person-log-delete-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (btn.classList.contains('is-confirming')) {
+            deleteContactLogEntry(personId, btn.dataset.logId);
+            refreshLog();
+          } else {
+            btn.classList.add('is-confirming');
+            btn.textContent = 'Remove?';
+            setTimeout(() => {
+              if (btn.classList.contains('is-confirming')) {
+                btn.classList.remove('is-confirming');
+                btn.textContent = '×';
+              }
+            }, 3000);
+          }
+        });
+      });
+    }
+
+    refreshLog();
 
     form.querySelector('#ppl-log-btn').addEventListener('click', () => {
       const type = form.querySelector('[name="contactType"]').value;
