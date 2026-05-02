@@ -320,12 +320,14 @@
 
 .bd-cat-uncategorized { background: color-mix(in srgb, var(--text-faint) 12%, transparent); color: var(--text-muted); }
 .bd-cat-shows         { background: color-mix(in srgb, #9b87d1 15%, transparent); color: #6b5da0; }
+.bd-cat-movies        { background: color-mix(in srgb, #c9a845 15%, transparent); color: #7a6018; }
 .bd-cat-books         { background: color-mix(in srgb, #d4956a 15%, transparent); color: #a05a28; }
 .bd-cat-podcasts      { background: color-mix(in srgb, #5ba3b0 15%, transparent); color: #2e7a87; }
 .bd-cat-writing       { background: color-mix(in srgb, var(--sage) 18%, transparent); color: #5a7852; }
 .bd-cat-claude-projects { background: color-mix(in srgb, var(--accent) 15%, transparent); color: #8a5652; }
 .bd-cat-places        { background: color-mix(in srgb, #6a98c8 15%, transparent); color: #3a6898; }
 .bd-cat-other         { background: color-mix(in srgb, var(--text-muted) 12%, transparent); color: var(--text-muted); }
+.bd-cat-dont-forget   { background: color-mix(in srgb, #c97a68 15%, transparent); color: #8a4030; }
 
 /* ── Item extras: notes, link, checklist ─────────────────────────────────────── */
 

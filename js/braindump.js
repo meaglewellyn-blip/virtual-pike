@@ -16,12 +16,14 @@
   const CATEGORIES = [
     { id: 'uncategorized',   label: 'Uncategorized' },
     { id: 'shows',           label: 'Shows' },
+    { id: 'movies',          label: 'Movies' },
     { id: 'books',           label: 'Books' },
     { id: 'podcasts',        label: 'Podcasts' },
     { id: 'writing',         label: 'Writing' },
     { id: 'claude-projects', label: 'Claude Projects' },
     { id: 'places',          label: 'Places' },
     { id: 'other',           label: 'Other' },
+    { id: 'dont-forget',     label: "Don't Forget" },
   ];
 
   // ─── Module state ─────────────────────────────────────────────────────────────
@@ -723,6 +725,41 @@
         if (input) input.focus();
       }, 60);
     });
+
+    // ── One-time media import (flag: brainDumpImportV1) ──────────────────────────
+    if (!global.Pike.state.data.brainDumpImportV1) {
+      const now = new Date().toISOString();
+      function mkEntry(text, category, notes) {
+        return { id: uid(), text, category, createdAt: now, status: 'active', promotedTo: null, notes: notes || '', link: '', checklist: [] };
+      }
+      const entries = [
+        // Movies
+        mkEntry('The Imitation Game',   'movies'),
+        mkEntry('Maleficent',           'movies'),
+        mkEntry('Gifted',               'movies'),
+        mkEntry('Byzantium',            'movies'),
+        mkEntry('Love & Other Drugs',   'movies'),
+        mkEntry('Blindness',            'movies'),
+        // Shows
+        mkEntry('Grief',                                          'shows'),
+        mkEntry('Behind Her Eyes',                                'shows'),
+        mkEntry('Paradise',                                       'shows', 'Hulu'),
+        mkEntry('The Pendragon Cycle: Rise of the Merlin',        'shows', '2026'),
+        mkEntry("It's All Her Fault",                             'shows', 'Peacock'),
+        mkEntry('Nikita',                                         'shows'),
+        mkEntry('Revenge',                                        'shows'),
+        mkEntry('The Night Manager',                              'shows'),
+        mkEntry('The Madison',                                    'shows'),
+        mkEntry('Scarpetta',                                      'shows'),
+        mkEntry('Poldark',                                        'shows'),
+        mkEntry('The Lioness',                                    'shows'),
+      ];
+      global.Pike.state.commit((d) => {
+        if (!d.brainDump) d.brainDump = [];
+        d.brainDump.unshift(...entries);
+        d.brainDumpImportV1 = true;
+      });
+    }
   }
 
   global.Pike = global.Pike || {};
