@@ -154,10 +154,14 @@
     wireSyncIndicator();
     wireWorkdayInput();
     renderTodayPlaceholder();
+    if (Pike.recurrence) Pike.recurrence.run();
     if (Pike.today) Pike.today.render();
 
     Pike.state.on(() => {
       renderTodayPlaceholder();
+      // Run recurrence engine on every state change. It's idempotent — most
+      // calls are a quick no-op once today's tasks are already generated.
+      if (Pike.recurrence) Pike.recurrence.run();
       if (Pike.today) Pike.today.render();
     });
 

@@ -15,10 +15,11 @@
 (function (global) {
   'use strict';
 
-  // === Pike password — replace this hash before deploying privately ===
-  // Default: hash of the literal string 'pike' so local dev works out of the box.
-  const PIKE_PASSWORD_HASH = 'ce9255f4a1bcbec63aa3a7a450b6480d03a27497099e3a5dac566517919ab4c1';
-  // ====================================================================
+  // === Pike password (SHA-256 of Meagan's chosen passphrase). ===
+  // The password itself was hashed locally and never written down.
+  // To rotate: run  echo -n 'NEWPASSWORD' | shasum -a 256  and replace below.
+  const PIKE_PASSWORD_HASH = '16c1eed5863a7009ce63bccd720b07899cf09e96ea2fc95701e189c5b04fea6f';
+  // ===============================================================
 
   const SESSION_KEY = 'pike.auth.unlocked.v1';
 

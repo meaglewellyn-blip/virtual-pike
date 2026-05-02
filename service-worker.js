@@ -1,5 +1,5 @@
 /* Virtual Pike — minimal service worker (offline app shell) */
-const CACHE_VERSION = 'pike-v3';
+const CACHE_VERSION = 'pike-v4';
 const APP_SHELL = [
   './',
   './index.html',
@@ -15,6 +15,7 @@ const APP_SHELL = [
   './js/router.js',
   './js/db.js',
   './js/modal.js',
+  './js/recurrence.js',
   './js/today.js',
   './js/app.js',
 ];

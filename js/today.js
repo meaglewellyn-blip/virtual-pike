@@ -436,6 +436,23 @@
 
     const isScheduled = !!initial.scheduledStart;
 
+    const library = !isEdit && global.Pike.recurrence
+      ? global.Pike.recurrence.manualRecurrences()
+      : [];
+    const libraryHTML = library.length ? `
+      <div class="task-library">
+        <div class="task-library-eyebrow">Or pull from your library</div>
+        <div class="task-library-list">
+          ${library.map((r) => `
+            <button type="button" class="task-library-item" data-library-id="${escapeAttr(r.id)}">
+              <span class="task-library-title">${escapeAttr(r.title)}</span>
+              <span class="task-library-mins">${escapeAttr(fmtDuration(r.estimateMinutes) || '')}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
+
     form.innerHTML = `
       <label>
         <span>What needs doing?</span>
@@ -455,12 +472,23 @@
         <span style="text-transform: none; letter-spacing: 0; font-size: var(--fs-sm); color: var(--text);">Completed</span>
       </label>
       ` : ''}
+      ${libraryHTML}
       <div class="pike-modal-actions">
         ${isEdit ? '<button type="button" class="btn btn-danger" data-action="delete">Delete</button>' : ''}
         <button type="button" class="btn" data-modal-close="1">Cancel</button>
         <button type="submit" class="btn btn-primary">${isEdit ? 'Save' : 'Add task'}</button>
       </div>
     `;
+
+    // Wire library quick-add buttons
+    form.querySelectorAll('.task-library-item').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.libraryId;
+        if (id && global.Pike.recurrence.quickAddFromLibrary(id)) {
+          global.Pike.modal.close();
+        }
+      });
+    });
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
