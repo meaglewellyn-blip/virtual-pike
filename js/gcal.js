@@ -120,7 +120,16 @@
     try {
       const { events, error } = await callEdge({ action: 'events', source });
       if (error === 'not_connected') return;
-      const normalized = (events || []).map((e) => normalizeEvent(e, source));
+      const normalized = (events || [])
+        .filter((e) => {
+          // Drop cancelled events
+          if (e.status === 'cancelled') return false;
+          // Drop events the authenticated user personally declined
+          const selfAttendee = (e.attendees || []).find((a) => a.self === true);
+          if (selfAttendee && selfAttendee.responseStatus === 'declined') return false;
+          return true;
+        })
+        .map((e) => normalizeEvent(e, source));
       Pike.state.commit((d) => {
         if (!d.calendarEvents) d.calendarEvents = [];
         d.calendarEvents = d.calendarEvents.filter((e) => e.source !== source);

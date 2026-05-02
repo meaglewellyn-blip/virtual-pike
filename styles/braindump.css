@@ -11,8 +11,16 @@
   box-shadow: var(--shadow-1);
 }
 
+/* Input row: text field + submit button */
+.bd-capture-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .bd-capture-input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   background: none;
   border: none;
   border-bottom: 1px solid var(--line-soft);
@@ -35,6 +43,32 @@
   border-bottom-color: var(--accent);
 }
 
+/* Submit arrow button */
+.bd-capture-submit {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.85;
+  transition: opacity var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+  font-family: var(--font-body);
+  padding: 0;
+}
+
+.bd-capture-submit:hover {
+  opacity: 1;
+  background: var(--accent-strong);
+}
+
 /* Category pills row (shown below the input) */
 .bd-capture-cats {
   display: flex;
@@ -42,6 +76,101 @@
   gap: var(--space-2);
   padding-top: var(--space-3);
 }
+
+/* Expand toggle */
+.bd-expand-toggle {
+  background: none;
+  border: none;
+  padding: var(--space-1) 0;
+  margin-top: var(--space-2);
+  font-size: var(--fs-xs);
+  font-family: var(--font-body);
+  color: var(--text-faint);
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  display: inline-block;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.bd-expand-toggle:hover {
+  color: var(--text-muted);
+}
+
+/* Expanded details section */
+.bd-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  margin-top: var(--space-3);
+  border-top: 1px dashed var(--line-soft);
+}
+
+.bd-expanded-textarea {
+  resize: none;
+  min-height: 56px;
+}
+
+/* Checklist builder (capture + edit) */
+.bd-checklist-builder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bd-cl-add-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.bd-cl-add-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.bd-cl-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Row in capture checklist builder */
+.bd-cl-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.bd-cl-item > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.bd-cl-item-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2) !important;
+  height: auto !important;
+  font-size: var(--fs-sm) !important;
+}
+
+.bd-cl-remove {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 var(--space-1);
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.bd-cl-remove:hover { color: var(--accent-strong); }
 
 .bd-cat-pill {
   background: none;
@@ -198,6 +327,81 @@
 .bd-cat-places        { background: color-mix(in srgb, #6a98c8 15%, transparent); color: #3a6898; }
 .bd-cat-other         { background: color-mix(in srgb, var(--text-muted) 12%, transparent); color: var(--text-muted); }
 
+/* ── Item extras: notes, link, checklist ─────────────────────────────────────── */
+
+.bd-item-notes {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+  line-height: var(--lh-base);
+}
+
+.bd-item-link {
+  display: inline-block;
+  font-size: var(--fs-xs);
+  color: var(--accent-strong);
+  word-break: break-all;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+}
+
+.bd-item-link:hover { text-decoration: underline; }
+
+.bd-item-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: var(--space-1);
+}
+
+.bd-item-cl-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.bd-item-cl-row.is-done > span {
+  text-decoration: line-through;
+  color: var(--text-faint);
+}
+
+.bd-item-cl-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  background: none;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+  font-size: 0; /* hide text until done */
+}
+
+.bd-item-cl-check:hover {
+  border-color: var(--sage);
+}
+
+.bd-item-cl-row.is-done .bd-item-cl-check {
+  background: var(--sage);
+  border-color: var(--sage);
+  font-size: 8px;
+  color: #fff;
+}
+
+.bd-item-cl-row.is-done .bd-item-cl-check::after {
+  content: '✓';
+  color: #fff;
+  font-size: 8px;
+  line-height: 1;
+}
+
 /* ── Item actions (shown on hover) ───────────────────────────────────────────── */
 
 .bd-item-actions {
@@ -211,6 +415,11 @@
 
 .bd-item:hover .bd-item-actions {
   opacity: 1;
+}
+
+/* Always visible on touch devices */
+@media (hover: none) {
+  .bd-item-actions { opacity: 1; }
 }
 
 .bd-action-btn {
@@ -249,4 +458,31 @@
 .bd-edit-textarea {
   resize: vertical;
   min-height: 72px;
+}
+
+/* ── Edit modal: checklist section ──────────────────────────────────────────── */
+
+.bd-edit-checklist-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bd-edit-cl-label {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bd-edit-form label > span,
+.bd-edit-form .bd-edit-cl-label {
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-1);
 }

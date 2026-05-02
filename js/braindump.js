@@ -88,22 +88,35 @@
     const wrap = document.createElement('div');
     wrap.className = 'bd-capture';
 
+    // ── Input row: text input + submit button ──
+    const inputRow = document.createElement('div');
+    inputRow.className = 'bd-capture-row';
+
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'bd-capture-input';
     input.id = 'braindump-input';
-    input.placeholder = 'What\'s on your mind? Press Enter to save.';
+    input.placeholder = "What's on your mind?";
     input.maxLength = 500;
     input.autocomplete = 'off';
 
-    // Category pills (optional — defaults to uncategorized)
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'button';
+    submitBtn.className = 'bd-capture-submit';
+    submitBtn.setAttribute('aria-label', 'Save');
+    submitBtn.textContent = '→';
+
+    inputRow.appendChild(input);
+    inputRow.appendChild(submitBtn);
+
+    // ── Category pills ──
     const catRow = document.createElement('div');
     catRow.className = 'bd-capture-cats';
 
     let selectedCat = null;
 
     CATEGORIES.forEach((cat) => {
-      if (cat.id === 'uncategorized') return; // default; not shown in picker
+      if (cat.id === 'uncategorized') return;
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'bd-cat-pill';
@@ -122,9 +135,115 @@
       catRow.appendChild(btn);
     });
 
+    // ── Expand toggle ──
+    let expanded = false;
+    const expandToggle = document.createElement('button');
+    expandToggle.type = 'button';
+    expandToggle.className = 'bd-expand-toggle';
+    expandToggle.textContent = '+ details';
+
+    // ── Expanded section: notes, link, checklist ──
+    const expandedSection = document.createElement('div');
+    expandedSection.className = 'bd-expanded';
+    expandedSection.hidden = true;
+
+    // Notes
+    const notesTextarea = document.createElement('textarea');
+    notesTextarea.className = 'input bd-expanded-textarea';
+    notesTextarea.placeholder = 'Additional context…';
+    notesTextarea.rows = 2;
+    notesTextarea.setAttribute('aria-label', 'Notes');
+
+    // Link
+    const linkInput = document.createElement('input');
+    linkInput.type = 'url';
+    linkInput.className = 'input';
+    linkInput.placeholder = 'Paste a link… (https://…)';
+    linkInput.setAttribute('aria-label', 'Link');
+
+    // Checklist builder
+    const clWrap = document.createElement('div');
+    clWrap.className = 'bd-checklist-builder';
+
+    const clList = document.createElement('div');
+    clList.className = 'bd-cl-list';
+
+    const clAddRow = document.createElement('div');
+    clAddRow.className = 'bd-cl-add-row';
+    const clInput = document.createElement('input');
+    clInput.type = 'text';
+    clInput.className = 'input';
+    clInput.placeholder = 'Add checklist item…';
+    const clAddBtn = document.createElement('button');
+    clAddBtn.type = 'button';
+    clAddBtn.className = 'btn btn-ghost btn-sm';
+    clAddBtn.textContent = '+';
+    clAddRow.appendChild(clInput);
+    clAddRow.appendChild(clAddBtn);
+
+    clWrap.appendChild(clList);
+    clWrap.appendChild(clAddRow);
+
+    // In-memory checklist items for this capture session
+    const captureChecklist = [];
+
+    function renderCaptureClList() {
+      clList.innerHTML = '';
+      captureChecklist.forEach((ci, idx) => {
+        const row = document.createElement('div');
+        row.className = 'bd-cl-item';
+        const labelEl = document.createElement('span');
+        labelEl.textContent = ci.text;
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'bd-cl-remove';
+        removeBtn.setAttribute('aria-label', 'Remove item');
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', () => {
+          captureChecklist.splice(idx, 1);
+          renderCaptureClList();
+        });
+        row.appendChild(labelEl);
+        row.appendChild(removeBtn);
+        clList.appendChild(row);
+      });
+    }
+
+    function addCaptureClItem() {
+      const text = clInput.value.trim();
+      if (!text) return;
+      captureChecklist.push({ id: `ci_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`, text });
+      clInput.value = '';
+      renderCaptureClList();
+    }
+
+    clAddBtn.addEventListener('click', addCaptureClItem);
+    clInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); addCaptureClItem(); }
+    });
+
+    expandedSection.appendChild(notesTextarea);
+    expandedSection.appendChild(linkInput);
+    expandedSection.appendChild(clWrap);
+
+    expandToggle.addEventListener('click', () => {
+      expanded = !expanded;
+      expandedSection.hidden = !expanded;
+      expandToggle.textContent = expanded ? '− details' : '+ details';
+      if (expanded) notesTextarea.focus();
+    });
+
+    // ── Save logic ──
     function saveCapture() {
       const text = input.value.trim();
       if (!text) return;
+
+      const notes = notesTextarea.value.trim();
+      const link  = linkInput.value.trim();
+      const checklist = captureChecklist.length
+        ? captureChecklist.map((ci) => ({ id: ci.id, text: ci.text, done: false }))
+        : [];
+
       global.Pike.state.commit((d) => {
         if (!d.brainDump) d.brainDump = [];
         d.brainDump.unshift({
@@ -134,21 +253,40 @@
           createdAt: new Date().toISOString(),
           status: 'active',
           promotedTo: null,
+          notes,
+          link,
+          checklist,
         });
       });
+
+      // Reset capture state
       input.value = '';
+      notesTextarea.value = '';
+      linkInput.value = '';
+      captureChecklist.length = 0;
+      renderCaptureClList();
       selectedCat = null;
       catRow.querySelectorAll('.bd-cat-pill').forEach((b) => b.classList.remove('is-selected'));
-      // Keep focus in input for rapid capture
+
+      // Collapse details after save
+      if (expanded) {
+        expanded = false;
+        expandedSection.hidden = true;
+        expandToggle.textContent = '+ details';
+      }
+
       input.focus();
     }
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); saveCapture(); }
     });
+    submitBtn.addEventListener('click', saveCapture);
 
-    wrap.appendChild(input);
+    wrap.appendChild(inputRow);
     wrap.appendChild(catRow);
+    wrap.appendChild(expandToggle);
+    wrap.appendChild(expandedSection);
     return wrap;
   }
 
@@ -193,7 +331,7 @@
       const empty = document.createElement('p');
       empty.className = 'bd-empty';
       empty.textContent = activeFilter === 'all'
-        ? 'Nothing here yet. Type something above and press Enter to save it.'
+        ? 'Nothing here yet. Type something above to save it.'
         : 'Nothing in this category yet.';
       wrap.appendChild(empty);
       return wrap;
@@ -210,11 +348,66 @@
     const body = document.createElement('div');
     body.className = 'bd-item-body';
 
+    // Main text
     const textEl = document.createElement('p');
     textEl.className = 'bd-item-text';
     textEl.textContent = item.text;
     body.appendChild(textEl);
 
+    // Notes
+    if (item.notes) {
+      const notesEl = document.createElement('p');
+      notesEl.className = 'bd-item-notes';
+      notesEl.textContent = item.notes;
+      body.appendChild(notesEl);
+    }
+
+    // Link
+    if (item.link) {
+      const linkEl = document.createElement('a');
+      linkEl.className = 'bd-item-link';
+      linkEl.href = item.link;
+      linkEl.target = '_blank';
+      linkEl.rel = 'noopener noreferrer';
+      try {
+        linkEl.textContent = new URL(item.link).hostname.replace(/^www\./, '');
+      } catch (_) {
+        linkEl.textContent = item.link;
+      }
+      body.appendChild(linkEl);
+    }
+
+    // Checklist (interactive — toggle done/undone directly on the card)
+    if (item.checklist && item.checklist.length) {
+      const clWrap = document.createElement('div');
+      clWrap.className = 'bd-item-checklist';
+      item.checklist.forEach((ci) => {
+        const row = document.createElement('div');
+        row.className = 'bd-item-cl-row' + (ci.done ? ' is-done' : '');
+
+        const checkBtn = document.createElement('button');
+        checkBtn.type = 'button';
+        checkBtn.className = 'bd-item-cl-check';
+        checkBtn.setAttribute('aria-label', ci.done ? 'Mark undone' : 'Mark done');
+        checkBtn.addEventListener('click', () => {
+          global.Pike.state.commit((d) => {
+            const bdItem = (d.brainDump || []).find((x) => x.id === item.id);
+            if (!bdItem) return;
+            const clItem = (bdItem.checklist || []).find((x) => x.id === ci.id);
+            if (clItem) clItem.done = !clItem.done;
+          });
+        });
+
+        const labelEl = document.createElement('span');
+        labelEl.textContent = ci.text;
+        row.appendChild(checkBtn);
+        row.appendChild(labelEl);
+        clWrap.appendChild(row);
+      });
+      body.appendChild(clWrap);
+    }
+
+    // Meta row: category badge + date + promoted badge
     const metaRow = document.createElement('div');
     metaRow.className = 'bd-item-meta';
 
@@ -275,9 +468,6 @@
   }
 
   // ─── Promote modal ────────────────────────────────────────────────────────────
-  // Future-friendly: "promote to" currently means task system.
-  // The promotedTo object uses { type, label, targetId } so other destinations
-  // (e.g. People, Travel) can be added later without a data migration.
 
   function openPromoteModal(item) {
     const weekendRhythms = (getData().rhythms || []).filter(
@@ -389,7 +579,6 @@
           promotedLabel = bucket === 'daily' ? 'Daily Defaults' : 'Task Library';
         }
 
-        // Mark the brain dump entry as promoted — original stays visible
         const bdItem = (d.brainDump || []).find((x) => x.id === item.id);
         if (bdItem) {
           bdItem.promotedTo = { type: 'task', targetId, label: promotedLabel };
@@ -410,6 +599,7 @@
     ).join('');
 
     const form = document.createElement('form');
+    form.className = 'bd-edit-form';
     form.innerHTML = `
       <label>
         <span>Idea</span>
@@ -421,11 +611,74 @@
           ${catOptionsHTML}
         </select>
       </label>
+      <label>
+        <span>Notes</span>
+        <textarea class="input bd-edit-textarea" name="notes" rows="2" placeholder="Additional context…">${esc(item.notes || '')}</textarea>
+      </label>
+      <label>
+        <span>Link</span>
+        <input type="url" class="input" name="link" placeholder="https://…" value="${esc(item.link || '')}">
+      </label>
+      <div class="bd-edit-checklist-wrap">
+        <span class="bd-edit-cl-label">Checklist</span>
+        <div id="bd-edit-cl-list" class="bd-cl-list"></div>
+        <div class="bd-cl-add-row">
+          <input type="text" class="input" id="bd-edit-cl-input" placeholder="Add item…">
+          <button type="button" class="btn btn-ghost btn-sm" id="bd-edit-cl-add">+</button>
+        </div>
+      </div>
       <div class="pike-modal-actions">
         <button type="button" class="btn" data-modal-close="1">Cancel</button>
         <button type="submit" class="btn btn-primary">Save</button>
       </div>
     `;
+
+    // Work with a mutable copy of the checklist
+    const checklist = (item.checklist || []).map((ci) => ({ ...ci }));
+
+    function refreshEditClList() {
+      const listEl = form.querySelector('#bd-edit-cl-list');
+      listEl.innerHTML = '';
+      checklist.forEach((ci, idx) => {
+        const row = document.createElement('div');
+        row.className = 'bd-cl-item';
+
+        const textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.className = 'input bd-cl-item-input';
+        textInput.value = ci.text;
+        textInput.addEventListener('input', () => { ci.text = textInput.value; });
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'bd-cl-remove';
+        removeBtn.setAttribute('aria-label', 'Remove item');
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', () => {
+          checklist.splice(idx, 1);
+          refreshEditClList();
+        });
+
+        row.appendChild(textInput);
+        row.appendChild(removeBtn);
+        listEl.appendChild(row);
+      });
+    }
+    refreshEditClList();
+
+    function addEditClItem() {
+      const clInput = form.querySelector('#bd-edit-cl-input');
+      const text = clInput.value.trim();
+      if (!text) return;
+      checklist.push({ id: `ci_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`, text, done: false });
+      clInput.value = '';
+      refreshEditClList();
+    }
+
+    form.querySelector('#bd-edit-cl-add').addEventListener('click', addEditClItem);
+    form.querySelector('#bd-edit-cl-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); addEditClItem(); }
+    });
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -433,9 +686,18 @@
       const text = String(fd.get('text') || '').trim();
       if (!text) return;
       const category = String(fd.get('category') || 'uncategorized');
+      const notes    = String(fd.get('notes') || '').trim();
+      const link     = String(fd.get('link') || '').trim();
+
       global.Pike.state.commit((d) => {
         const bdItem = (d.brainDump || []).find((x) => x.id === item.id);
-        if (bdItem) { bdItem.text = text; bdItem.category = category; }
+        if (bdItem) {
+          bdItem.text = text;
+          bdItem.category = category;
+          bdItem.notes = notes;
+          bdItem.link = link;
+          bdItem.checklist = checklist.filter((ci) => ci.text.trim());
+        }
       });
       global.Pike.modal.close();
     });
@@ -446,17 +708,14 @@
   // ─── Init ─────────────────────────────────────────────────────────────────────
 
   function init() {
-    // Global 'b' shortcut — focus capture input without hijacking typing elsewhere
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'b' && e.key !== 'B') return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const tag = document.activeElement?.tagName?.toLowerCase();
       if (tag && ['input', 'textarea', 'select'].includes(tag)) return;
       if (document.activeElement?.isContentEditable) return;
-      // Don't activate while a modal is open
       const modal = document.getElementById('pike-modal');
       if (modal && !modal.hidden) return;
-      // Navigate to Brain Dump section and focus the input
       location.hash = '#braindump';
       if (global.Pike.router) global.Pike.router.activate('braindump');
       setTimeout(() => {
