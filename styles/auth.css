@@ -1,0 +1,83 @@
+/* Virtual Pike — password gate */
+
+body.pike-locked .app { display: none !important; }
+body:not(.pike-locked) .pike-gate { display: none !important; }
+
+.pike-gate {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  z-index: 100;
+  padding: var(--space-6);
+}
+
+.pike-gate-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-9) var(--space-7);
+  width: min(420px, 100%);
+  text-align: center;
+}
+
+.pike-gate-mark {
+  font-family: var(--font-display);
+  font-size: 56px;
+  letter-spacing: -0.005em;
+  line-height: 1;
+  color: var(--text);
+  margin-bottom: var(--space-2);
+}
+
+.pike-gate-sub {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: var(--space-7);
+}
+
+.pike-gate-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--text);
+  font-size: var(--fs-md);
+  text-align: center;
+  letter-spacing: 0.04em;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.pike-gate-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.pike-gate-error {
+  margin-top: var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--accent-strong);
+  min-height: 1.2em;
+}
+
+.pike-gate-button {
+  margin-top: var(--space-5);
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.pike-gate-button:hover { background: var(--accent-strong); }

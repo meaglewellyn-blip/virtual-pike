@@ -131,6 +131,7 @@
 
   function tick() {
     renderTodayPlaceholder();
+    if (Pike.today) Pike.today.render();
   }
 
   function registerServiceWorker() {
@@ -144,17 +145,20 @@
   }
 
   function boot() {
+    if (Pike.auth) Pike.auth.init();
     if (Pike.db) Pike.db.init();
     if (Pike.router) Pike.router.init();
+    if (Pike.modal) Pike.modal.init();
+    if (Pike.today) Pike.today.init();
 
     wireSyncIndicator();
     wireWorkdayInput();
     renderTodayPlaceholder();
+    if (Pike.today) Pike.today.render();
 
     Pike.state.on(() => {
-      // Re-render whatever the active section needs.
-      // Phase 1: only Today has dynamic content.
       renderTodayPlaceholder();
+      if (Pike.today) Pike.today.render();
     });
 
     setInterval(tick, 60_000);

@@ -21,8 +21,27 @@
   <link rel="stylesheet" href="styles/components.css">
   <link rel="stylesheet" href="styles/sidebar.css">
   <link rel="stylesheet" href="styles/today.css">
+  <link rel="stylesheet" href="styles/auth.css">
 </head>
-<body>
+<body class="pike-locked">
+
+  <!-- Password gate (shown when body has .pike-locked) -->
+  <div class="pike-gate" aria-hidden="false">
+    <div class="pike-gate-card">
+      <div class="pike-gate-mark">Pike</div>
+      <div class="pike-gate-sub">a calm cockpit</div>
+      <form id="pike-gate-form" autocomplete="off">
+        <input id="pike-gate-input"
+               class="pike-gate-input"
+               type="password"
+               placeholder="passphrase"
+               autocomplete="current-password"
+               aria-label="Passphrase">
+        <button class="pike-gate-button" type="submit">Enter</button>
+        <div id="pike-gate-error" class="pike-gate-error" role="alert"></div>
+      </form>
+    </div>
+  </div>
 
   <div class="app">
 
@@ -71,22 +90,25 @@
             </div>
           </div>
 
-          <div class="today-modules">
-            <div class="placeholder-card">
-              <div class="placeholder-eyebrow">Phase 2 — coming next</div>
-              <h3>Hourly timeline</h3>
-              <p>Live current-time line, fixed events as solid blocks, flexible tasks as soft draggable blocks, open windows visible at a glance.</p>
-            </div>
-            <div class="placeholder-card">
-              <div class="placeholder-eyebrow">Coming soon</div>
-              <h3>Today's rail</h3>
-              <ul>
-                <li>Weather + rain timing</li>
-                <li>Daily quote</li>
-                <li>Connection pulse</li>
-                <li>Flexible task tray</li>
-              </ul>
-            </div>
+          <div class="today-grid">
+            <section class="today-timeline-wrap">
+              <header class="today-timeline-header">
+                <h2 class="today-section-title">Today's rhythm</h2>
+                <button id="today-add-event" class="btn btn-primary btn-sm" type="button">+ Event</button>
+              </header>
+              <div id="today-timeline" class="today-timeline" aria-label="Hourly timeline"></div>
+            </section>
+
+            <aside class="today-tray">
+              <header class="today-tray-header">
+                <h3 class="today-section-title">Flexible</h3>
+                <button id="today-add-task" class="btn btn-ghost btn-sm" type="button">+ Task</button>
+              </header>
+              <div id="today-tray-list" class="today-tray-list"></div>
+              <p id="today-tray-empty" class="today-tray-empty" hidden>
+                No flexible tasks yet. Tap <strong>+&nbsp;Task</strong> to capture one.
+              </p>
+            </aside>
           </div>
         </section>
 
@@ -191,13 +213,28 @@
 
   </div>
 
+  <!-- Reusable modal -->
+  <div id="pike-modal" class="pike-modal" hidden>
+    <div class="pike-modal-backdrop" data-modal-close="1"></div>
+    <div class="pike-modal-card" role="dialog" aria-modal="true" aria-labelledby="pike-modal-title">
+      <header class="pike-modal-header">
+        <h3 id="pike-modal-title" class="pike-modal-title"></h3>
+        <button class="pike-modal-close" type="button" aria-label="Close" data-modal-close="1">&times;</button>
+      </header>
+      <div id="pike-modal-body" class="pike-modal-body"></div>
+    </div>
+  </div>
+
   <!-- Supabase JS SDK (loads from CDN; if unreachable, app stays in local-only mode) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-  <!-- App scripts (order matters: state → router → db → app) -->
+  <!-- App scripts (order matters: auth → state → router → db → today → app) -->
+  <script src="js/auth.js"></script>
   <script src="js/state.js"></script>
   <script src="js/router.js"></script>
   <script src="js/db.js"></script>
+  <script src="js/modal.js"></script>
+  <script src="js/today.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

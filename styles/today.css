@@ -71,15 +71,292 @@
   color: var(--text);
 }
 
-/* Phase 1 placeholder grid for upcoming Today modules */
-.today-modules {
+/* ===== Today grid: timeline + flexible task tray ===== */
+
+.today-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--space-5);
+  gap: var(--space-6);
 }
 
 @media (min-width: 900px) {
-  .today-modules {
-    grid-template-columns: 2fr 1fr;
+  .today-grid {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    align-items: start;
   }
+}
+
+.today-section-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  margin: 0;
+  color: var(--text);
+}
+
+.today-timeline-wrap,
+.today-tray {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-1);
+}
+
+.today-timeline-header,
+.today-tray-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+/* === Timeline === */
+
+.today-timeline {
+  --hour-h: 64px;          /* one hour = 64px */
+  --gutter: 56px;          /* hour-label column width */
+  --row-pad: 8px;
+  position: relative;
+  border-top: 1px solid var(--line-soft);
+  /* Height computed via inline style based on dayStart..dayEnd */
+}
+
+.tl-hour-row {
+  position: relative;
+  height: var(--hour-h);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tl-hour-row::before {
+  content: attr(data-label);
+  position: absolute;
+  left: 0;
+  top: -7px;
+  width: var(--gutter);
+  padding-right: var(--space-2);
+  text-align: right;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  background: var(--surface);
+}
+
+/* Half-hour soft tick */
+.tl-hour-row::after {
+  content: '';
+  position: absolute;
+  left: var(--gutter);
+  right: 0;
+  top: 50%;
+  border-top: 1px dashed var(--line-soft);
+  opacity: 0.5;
+}
+
+.tl-track {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--space-2);
+  top: 0;
+  bottom: 0;
+}
+
+/* Now-line — spans full width; the visible line is only in the track area */
+.tl-now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.tl-now::after {
+  content: '';
+  position: absolute;
+  left: var(--gutter);
+  right: 0;
+  top: 0;
+  border-top: 2px solid var(--accent);
+}
+.tl-now::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--gutter) - 6px);
+  top: -6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.tl-now-label {
+  position: absolute;
+  left: 0;
+  top: -7px;
+  width: var(--gutter);
+  padding-right: var(--space-2);
+  text-align: right;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+  background: var(--surface);
+}
+
+/* Workday-start soft marker — line only in track, label in gutter or right edge */
+.tl-workstart {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.tl-workstart::after {
+  content: '';
+  position: absolute;
+  left: var(--gutter);
+  right: 0;
+  top: 0;
+  border-top: 1px dashed var(--sage);
+}
+.tl-workstart-label {
+  position: absolute;
+  right: var(--space-3);
+  top: -8px;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6f7d68;
+  background: var(--surface);
+  padding: 0 var(--space-2);
+}
+
+/* Blocks: events + scheduled tasks */
+.tl-block {
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 6px 12px 8px;
+  border-radius: var(--radius);
+  font-size: var(--fs-sm);
+  line-height: 1.3;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+  z-index: 1;
+}
+.tl-block:hover {
+  transform: translateX(-1px);
+  box-shadow: var(--shadow-2);
+}
+
+.tl-block-title {
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tl-block-time {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+
+/* Fixed event */
+.tl-block-event {
+  background: var(--event-fixed-bg);
+  border-left: 3px solid var(--text);
+}
+
+/* Flexible task (scheduled) */
+.tl-block-task {
+  background: var(--task-flex-bg);
+  border: 1px dashed var(--task-flex-edge);
+}
+.tl-block-task .tl-block-title { color: var(--text); }
+.tl-block-task.is-completed .tl-block-title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-faint);
+}
+
+/* Drop zone highlight while dragging */
+.today-timeline.is-drop-target { background: var(--surface-2); }
+.tl-drop-indicator {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--space-2);
+  height: 0;
+  border-top: 2px dashed var(--accent);
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* Empty timeline state */
+.tl-empty-hint {
+  position: absolute;
+  inset: var(--space-7) var(--space-7) auto auto;
+  width: min(280px, 60%);
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  font-style: italic;
+  pointer-events: none;
+  text-align: right;
+}
+
+/* === Task tray === */
+
+.today-tray-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.today-tray-empty {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  margin: 0;
+  line-height: var(--lh-loose);
+}
+
+.tray-task {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  cursor: grab;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
+  user-select: none;
+}
+.tray-task:hover {
+  background: #fff;
+  border-color: var(--text-muted);
+}
+.tray-task:active { cursor: grabbing; }
+.tray-task.is-dragging { opacity: 0.4; }
+
+.tray-task-title {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tray-task-meta {
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 900px) {
+  .today-tray { order: -1; }   /* tray above timeline on small screens */
 }

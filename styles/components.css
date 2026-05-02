@@ -147,3 +147,100 @@
 @media (max-width: 720px) {
   .quick-capture { bottom: 96px; right: var(--space-4); }
 }
+
+/* ===== Modal ===== */
+
+.pike-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+}
+.pike-modal[hidden] { display: none; }
+
+.pike-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(44, 42, 38, 0.32);
+  backdrop-filter: blur(2px);
+  animation: fade-in var(--dur-base) var(--ease);
+}
+
+.pike-modal-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-7);
+  width: min(480px, 100%);
+  max-height: calc(100vh - 2 * var(--space-5));
+  overflow-y: auto;
+  animation: fade-in var(--dur-base) var(--ease);
+}
+
+.pike-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.pike-modal-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  margin: 0;
+  color: var(--text);
+}
+
+.pike-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.pike-modal-close:hover { color: var(--text); background: var(--surface-2); }
+
+.pike-modal-body { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.pike-modal-body label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+
+.pike-modal-body label span {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.pike-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px dashed var(--line);
+}
+
+.pike-modal-actions .btn-danger {
+  margin-right: auto;
+  background: transparent;
+  color: var(--accent-strong);
+  border-color: transparent;
+}
+.pike-modal-actions .btn-danger:hover { background: var(--accent-soft); }
