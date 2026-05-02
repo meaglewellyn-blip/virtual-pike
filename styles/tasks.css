@@ -1,0 +1,146 @@
+/* Virtual Pike — Tasks library */
+
+/* ── Group cards ─────────────────────────────────────────────────────────────── */
+
+.tasks-group {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  margin-bottom: var(--space-5);
+  box-shadow: var(--shadow-1);
+}
+
+.tasks-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.tasks-group-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  color: var(--text);
+  margin: 0;
+}
+
+.tasks-group-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Routine sub-label (Weekend Rhythm only) */
+.tasks-group-desc {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  font-style: italic;
+}
+
+.tasks-routine-label {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-weight: var(--fw-medium);
+  padding: var(--space-3) 0 var(--space-2);
+  border-top: 1px solid var(--line-soft);
+  margin-top: var(--space-3);
+}
+
+.tasks-routine-label:first-of-type {
+  margin-top: 0;
+  border-top: none;
+  padding-top: 0;
+}
+
+/* ── Task list ───────────────────────────────────────────────────────────────── */
+
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ── Task items ──────────────────────────────────────────────────────────────── */
+
+.tasks-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+/* Coloured left accent per category */
+.tasks-item-rhythm {
+  border-left: 3px solid var(--sage);
+}
+
+.tasks-item-daily {
+  border-left: 3px solid var(--accent);
+}
+
+.tasks-item-other {
+  border-left: 3px solid var(--line);
+}
+
+.tasks-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.tasks-item-title {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tasks-item-duration {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Item actions ────────────────────────────────────────────────────────────── */
+
+.tasks-item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.tasks-add-today-btn {
+  white-space: nowrap;
+}
+
+/* Extra-small button variant */
+.btn-xs {
+  padding: 3px var(--space-2);
+  font-size: var(--fs-xs);
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
+}
+
+/* ── Empty states ────────────────────────────────────────────────────────────── */
+
+.tasks-empty {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  margin: 0;
+  font-style: italic;
+  line-height: var(--lh-loose);
+}

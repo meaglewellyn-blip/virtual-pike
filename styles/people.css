@@ -1,0 +1,232 @@
+/* Virtual Pike — People section */
+
+/* ── Upcoming events on Today ───────────────────────────────────────────────── */
+
+.today-people-events {
+  background: var(--surface);
+  border: 1px solid var(--accent-soft);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5) var(--space-6);
+  margin-bottom: var(--space-6);
+  box-shadow: var(--shadow-1);
+}
+
+.ppl-events-eyebrow {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  font-weight: var(--fw-medium);
+  margin-bottom: var(--space-3);
+}
+
+.ppl-event-item {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  line-height: var(--lh-snug);
+  padding: var(--space-1) 0;
+}
+
+.ppl-event-item + .ppl-event-item {
+  border-top: 1px dashed var(--line);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+/* ── People list ────────────────────────────────────────────────────────────── */
+
+.people-group {
+  margin-bottom: var(--space-6);
+}
+
+.people-group-label {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: var(--fw-medium);
+  margin-bottom: var(--space-3);
+  padding-left: var(--space-1);
+}
+
+/* Person card */
+.person-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.person-card:hover {
+  background: #fff;
+  border-color: var(--text-muted);
+}
+
+.person-card-info { flex: 1; min-width: 0; }
+
+.person-card-name {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.person-card-meta {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.person-card-chevron {
+  color: var(--text-faint);
+  font-size: var(--fs-lg);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Badges */
+.person-badge {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+  letter-spacing: 0.02em;
+}
+
+.person-badge.is-sober {
+  color: #6f7d68;
+  background: var(--sage-soft);
+  border-color: var(--sage);
+}
+
+/* Pulse dot */
+.person-pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--line);
+}
+
+.person-pulse-dot.is-ok      { background: var(--success); }
+.person-pulse-dot.is-warn    { background: var(--warning); }
+.person-pulse-dot.is-overdue { background: var(--accent-strong); box-shadow: 0 0 0 3px var(--accent-soft); }
+.person-pulse-dot.is-never   { background: var(--line); border: 2px dashed var(--text-faint); }
+
+/* ── Person modal ───────────────────────────────────────────────────────────── */
+
+.person-modal-form { display: flex; flex-direction: column; gap: var(--space-5); }
+
+.person-modal-pulse {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+}
+
+.person-pulse-label {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+}
+
+.person-pulse-cadence {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.person-modal-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.person-modal-section-title {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: var(--fw-medium);
+}
+
+.person-stepwork-row,
+.person-dates-row {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.person-stepwork-row label,
+.person-dates-row label {
+  flex: 1;
+  min-width: 140px;
+}
+
+.person-sober-years {
+  font-size: var(--fs-sm);
+  color: #6f7d68;
+  font-weight: var(--fw-medium);
+}
+
+.person-log-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.person-addtask-row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Contact log entries */
+.person-log-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px dashed var(--line-soft);
+  font-size: var(--fs-sm);
+}
+
+.person-log-entry:last-child { border-bottom: none; }
+
+.person-log-type {
+  text-transform: capitalize;
+  font-weight: var(--fw-medium);
+  color: var(--text);
+}
+
+.person-log-date { color: var(--text-muted); }
+
+.person-log-note {
+  width: 100%;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 2px;
+}
+
+.person-log-empty {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  margin: 0;
+}

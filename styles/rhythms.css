@@ -1,0 +1,280 @@
+/* Virtual Pike — Rhythms section */
+
+/* ── Workout card ────────────────────────────────────────────────────────────── */
+
+.rhythm-workout-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6) var(--space-7);
+  margin-bottom: var(--space-7);
+  box-shadow: var(--shadow-2);
+  border-left: 4px solid var(--sage);
+}
+
+.rhythm-workout-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.rhythm-workout-eyebrow {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sage);
+  font-weight: var(--fw-medium);
+  margin-bottom: var(--space-1);
+}
+
+.rhythm-workout-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  color: var(--text);
+  margin: 0;
+  line-height: var(--lh-tight);
+}
+
+/* Sequence position dots */
+.workout-sequence-dots {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding-top: var(--space-1);
+  flex-shrink: 0;
+}
+
+.workout-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--line);
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.workout-dot.is-current {
+  background: var(--sage);
+  box-shadow: 0 0 0 3px var(--sage-soft);
+}
+
+/* Exercise list */
+.rhythm-workout-exercises {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rhythm-workout-exercises li {
+  font-size: var(--fs-md);
+  color: var(--text);
+  line-height: var(--lh-snug);
+}
+
+.rhythm-workout-finisher {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--space-4);
+  font-style: italic;
+}
+
+.rhythm-workout-last {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  margin-bottom: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px dashed var(--line);
+}
+
+.rhythm-workout-last strong { color: var(--text-muted); }
+
+.rhythm-workout-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ── Weekly routines ────────────────────────────────────────────────────────── */
+
+.rhythms-routines {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-1);
+}
+
+.rhythms-routines-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.rhythms-section-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  color: var(--text);
+  margin: 0;
+}
+
+.rhythms-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.rhythm-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+}
+
+.rhythm-item-info { flex: 1; min-width: 0; }
+
+.rhythm-item-title {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+}
+
+.rhythm-item-schedule {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.rhythms-empty {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  margin: 0;
+  line-height: var(--lh-loose);
+}
+
+/* Day-row inside modal */
+.rhythm-day-row { margin-top: calc(-1 * var(--space-2)); }
+
+/* ── Subtask editor (inside modal) ─────────────────────────────────────────── */
+
+#rhythm-subtasks-section {
+  padding: var(--space-3) 0 0;
+}
+
+.rhythm-subtask-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.rhythm-subtask-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.rhythm-subtask-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rhythm-subtask-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.rhythm-subtask-remove {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.rhythm-subtask-remove:hover {
+  color: var(--rose);
+  background: rgba(201, 166, 161, 0.12);
+}
+
+/* ── Rhythm card action group ───────────────────────────────────────────────── */
+
+.rhythm-item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+/* ── Plan weekend modal ─────────────────────────────────────────────────────── */
+
+.rhythm-plan-week-label {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-4);
+}
+
+.rhythm-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.rhythm-plan-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.rhythm-plan-row-title {
+  font-size: var(--fs-base);
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+
+.rhythm-day-toggle {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.rhythm-day-btn {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--fs-sm);
+  font-family: var(--font-body);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.rhythm-day-btn:hover {
+  border-color: var(--sage);
+  color: var(--sage);
+}
+
+.rhythm-day-btn.is-active {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: #fff;
+}

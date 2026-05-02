@@ -83,6 +83,64 @@
     return null;
   }
 
+  /**
+   * Parse a flexible time string entered by the user.
+   * Accepts: "2:30 PM", "14:30", "2:30", "2:30pm", "1430", "10"
+   * Returns HH:MM string (24-hour) or null if unparseable.
+   */
+  function parseFlexTime(input) {
+    if (!input) return null;
+    const s = String(input).trim().toLowerCase().replace(/\s+/g, '');
+    if (!s) return null;
+
+    // "2:30pm", "14:30", "2:30"
+    const colonMatch = s.match(/^(\d{1,2}):(\d{2})(am|pm)?$/);
+    if (colonMatch) {
+      let h = parseInt(colonMatch[1], 10);
+      const m = parseInt(colonMatch[2], 10);
+      const ap = colonMatch[3];
+      if (ap === 'pm' && h !== 12) h += 12;
+      else if (ap === 'am' && h === 12) h = 0;
+      if (h >= 0 && h < 24 && m >= 0 && m < 60) return `${pad2(h)}:${pad2(m)}`;
+      return null;
+    }
+
+    // "1430", "230" (no colon)
+    const bareMatch = s.match(/^(\d{3,4})(am|pm)?$/);
+    if (bareMatch) {
+      const digits = bareMatch[1];
+      const ap = bareMatch[2];
+      let h, m;
+      if (digits.length === 4) { h = parseInt(digits.slice(0, 2), 10); m = parseInt(digits.slice(2), 10); }
+      else { h = parseInt(digits.slice(0, 1), 10); m = parseInt(digits.slice(1), 10); }
+      if (ap === 'pm' && h !== 12) h += 12;
+      else if (ap === 'am' && h === 12) h = 0;
+      if (h >= 0 && h < 24 && m >= 0 && m < 60) return `${pad2(h)}:${pad2(m)}`;
+      return null;
+    }
+
+    // Bare hour: "2pm", "10am", "14"
+    const hourMatch = s.match(/^(\d{1,2})(am|pm)?$/);
+    if (hourMatch) {
+      let h = parseInt(hourMatch[1], 10);
+      const ap = hourMatch[2];
+      if (ap === 'pm' && h !== 12) h += 12;
+      else if (ap === 'am' && h === 12) h = 0;
+      if (h >= 0 && h < 24) return `${pad2(h)}:00`;
+      return null;
+    }
+
+    return null;
+  }
+
+  // Format a stored HH:MM value for display in a text input (e.g. "14:30" → "2:30 PM")
+  function fmtTimeInput(hhmm) {
+    if (!hhmm) return '';
+    const mins = parseHHMM(hhmm);
+    if (mins == null) return hhmm;
+    return fmtClock(mins);
+  }
+
   // ===== State accessors =====
   function getData() { return global.Pike.state.data; }
   function getTimelineRange() {
@@ -100,6 +158,137 @@
   function render() {
     renderTimeline();
     renderTray();
+    renderTodayRhythms();
+    if (global.Pike.travel) global.Pike.travel.renderTripPrepForToday();
+  }
+
+  function renderTodayRhythms() {
+    const wrap = document.querySelector('.today-timeline-wrap');
+    if (!wrap) return;
+
+    const existing = wrap.querySelector('.today-rhythm-list-wrap');
+    if (existing) existing.remove();
+
+    if (!global.Pike.rhythms) return;
+
+    const today = new Date();
+    const todayDayName = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][today.getDay()];
+    const isWeekend = today.getDay() === 0 || today.getDay() === 6;
+
+    // Note: 'daily' rhythms are NOT shown here — they are daily-default tasks
+    // that live in the Flexible tray (auto-populated by recurrence.runDailyDefaults).
+    const rhythms = (getData().rhythms || []).filter((r) => {
+      if (!r.active || !r.schedule) return false;
+      const s = r.schedule;
+      if (s.type === 'weekdays') return !isWeekend;
+      if (s.type === 'weekends') return isWeekend;
+      if (s.type === 'weekly')   return s.day === todayDayName;
+      return false;
+    });
+
+    if (!rhythms.length) return;
+
+    const container = document.createElement('div');
+    container.className = 'today-rhythm-list-wrap';
+
+    const list = document.createElement('ul');
+    list.className = 'today-rhythm-list';
+
+    // Helper: build a single list item with check, title, duration, drag + schedule button
+    function buildRhythmLi({ isDone, title, estimateMinutes, onDone, rhythmRef }) {
+      const li = document.createElement('li');
+      li.className = 'today-rhythm-item' + (isDone ? ' is-done' : '');
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'today-rhythm-check';
+      btn.setAttribute('aria-label', isDone ? title + ' done' : 'Mark ' + title + ' done');
+      btn.setAttribute('aria-pressed', isDone ? 'true' : 'false');
+      if (isDone) btn.textContent = '✓';
+
+      const titleEl = document.createElement('span');
+      titleEl.className = 'today-rhythm-title';
+      titleEl.textContent = title;
+
+      li.appendChild(btn);
+      li.appendChild(titleEl);
+
+      if (estimateMinutes && !isDone) {
+        const dur = document.createElement('span');
+        dur.className = 'today-rhythm-dur';
+        dur.textContent = fmtDuration(estimateMinutes);
+        li.appendChild(dur);
+      }
+
+      if (!isDone) {
+        btn.addEventListener('click', onDone);
+
+        // Draggable — drag straight onto the timeline
+        li.draggable = true;
+        li.addEventListener('dragstart', (e) => {
+          li.classList.add('is-dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', JSON.stringify({ rhythmRef }));
+        });
+        li.addEventListener('dragend', () => li.classList.remove('is-dragging'));
+
+        // Schedule button — click to pick a time without dragging
+        const schedBtn = document.createElement('button');
+        schedBtn.type = 'button';
+        schedBtn.className = 'today-rhythm-sched-btn';
+        schedBtn.setAttribute('aria-label', 'Schedule on timeline');
+        schedBtn.textContent = '→';
+        schedBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openRhythmScheduleModal(rhythmRef);
+        });
+        li.appendChild(schedBtn);
+      }
+
+      return li;
+    }
+
+    rhythms.forEach((r) => {
+      if (r.subtasks && r.subtasks.length) {
+        const allocated = global.Pike.rhythms.getAllocatedSubtasksForDay(r, today);
+        if (allocated === null) {
+          // Not planned yet — show a nudge button
+          const li = document.createElement('li');
+          li.className = 'today-rhythm-item today-rhythm-nudge';
+          const planBtn = document.createElement('button');
+          planBtn.type = 'button';
+          planBtn.className = 'today-rhythm-plan-btn';
+          planBtn.textContent = 'Plan ' + r.title;
+          planBtn.addEventListener('click', () => global.Pike.rhythms.openPlanWeekendModal(r));
+          li.appendChild(planBtn);
+          list.appendChild(li);
+        } else {
+          allocated.forEach((sub) => {
+            const isDone = global.Pike.rhythms.isSubtaskDone(r, sub.id, today);
+            list.appendChild(buildRhythmLi({
+              isDone,
+              title: sub.title,
+              estimateMinutes: sub.estimateMinutes,
+              onDone: () => global.Pike.rhythms.markSubtaskDone(r.id, sub.id, today),
+              rhythmRef: { rhythmId: r.id, subtaskId: sub.id, title: sub.title, estimateMinutes: sub.estimateMinutes || 30 },
+            }));
+          });
+        }
+      } else {
+        // Regular atomic rhythm (daily, weekly, etc.)
+        const isDone = global.Pike.rhythms.isRhythmDoneThisPeriod(r, today);
+        list.appendChild(buildRhythmLi({
+          isDone,
+          title: r.title,
+          estimateMinutes: r.estimateMinutes,
+          onDone: () => global.Pike.rhythms.markRhythmDone(r.id, today),
+          rhythmRef: { rhythmId: r.id, subtaskId: null, title: r.title, estimateMinutes: r.estimateMinutes || 30 },
+        }));
+      }
+    });
+
+    container.appendChild(list);
+    wrap.appendChild(container);
   }
 
   function renderTimeline() {
@@ -192,6 +381,15 @@
       out.push({ kind: 'event', id: e.id, title: e.title, startMin: sm, endMin: em, raw: e });
     });
 
+    // Google Calendar events
+    (data.calendarEvents || []).forEach((e) => {
+      if (e.date !== tk || e.isAllDay || !e.start || !e.end) return;
+      const sm = parseHHMM(e.start);
+      const em = parseHHMM(e.end);
+      if (sm == null || em == null || em <= sm) return;
+      out.push({ kind: 'gcal', id: e.id, title: e.title, startMin: sm, endMin: em, source: e.source, raw: e });
+    });
+
     (data.tasks || []).forEach((t) => {
       if (t.scheduledDate !== tk) return;
       if (!t.scheduledStart) return;  // unscheduled tasks live in the tray
@@ -207,8 +405,11 @@
 
   function renderBlock(b) {
     const el = document.createElement('div');
-    el.className = 'tl-block ' + (b.kind === 'event' ? 'tl-block-event' : 'tl-block-task');
+    if (b.kind === 'event')      el.className = 'tl-block tl-block-event';
+    else if (b.kind === 'gcal')  el.className = 'tl-block tl-block-gcal';
+    else                         el.className = 'tl-block tl-block-task';
     if (b.completed) el.classList.add('is-completed');
+    if (b.source)    el.dataset.source = b.source;
 
     const top = minutesToPx(b.startMin);
     const height = Math.max(28, (b.endMin - b.startMin) / 60 * HOUR_HEIGHT_PX);
@@ -230,10 +431,21 @@
       el.appendChild(time);
     }
 
-    el.addEventListener('click', () => {
-      if (b.kind === 'event') openEventModal(b.raw);
-      else openTaskModal(b.raw);
-    });
+    if (b.kind === 'gcal') {
+      // Read-only — show a source badge, no click-to-edit
+      const srcDef = global.Pike.gcal?.SOURCES?.[b.source];
+      if (srcDef && height >= 32) {
+        const badge = document.createElement('div');
+        badge.className = 'tl-block-src-badge';
+        badge.textContent = srcDef.label;
+        el.appendChild(badge);
+      }
+    } else {
+      el.addEventListener('click', () => {
+        if (b.kind === 'event') openEventModal(b.raw);
+        else openTaskModal(b.raw);
+      });
+    }
 
     return el;
   }
@@ -338,9 +550,12 @@
       let payload;
       try { payload = JSON.parse(e.dataTransfer.getData('text/plain') || '{}'); }
       catch (_) { payload = {}; }
-      if (!payload.taskId) return;
       const min = snappedMinutesFromEvent(e);
-      scheduleTaskAt(payload.taskId, min);
+      if (payload.taskId) {
+        scheduleTaskAt(payload.taskId, min);
+      } else if (payload.rhythmRef) {
+        scheduleRhythmRefAt(payload.rhythmRef, min);
+      }
     });
   }
 
@@ -353,10 +568,69 @@
     });
   }
 
-  // ===== Modals: event / task =====
-  function openEventModal(existing = null) {
-    const isEdit = !!existing;
+  // Schedule a rhythm item (subtask or atomic) onto the timeline by creating a task entry
+  function scheduleRhythmRefAt(ref, startMinutes) {
     const tk = todayKey();
+    global.Pike.state.commit((d) => {
+      d.tasks = d.tasks || [];
+      // If already scheduled today for this ref, just update the time
+      const existing = d.tasks.find(
+        (t) => t.isRhythmRef && t.rhythmId === ref.rhythmId &&
+               (t.subtaskId || null) === (ref.subtaskId || null) &&
+               t.scheduledDate === tk
+      );
+      if (existing) {
+        existing.scheduledStart = fmtHHMM(startMinutes);
+      } else {
+        d.tasks.push({
+          id: uid('tsk'),
+          title: ref.title,
+          estimateMinutes: ref.estimateMinutes || 30,
+          scheduledDate: tk,
+          scheduledStart: fmtHHMM(startMinutes),
+          completedAt: null,
+          isRhythmRef: true,
+          rhythmId: ref.rhythmId,
+          subtaskId: ref.subtaskId || null,
+          category: 'self',
+        });
+      }
+    });
+  }
+
+  // Modal to pick a time before scheduling a rhythm item
+  function openRhythmScheduleModal(ref) {
+    const form = document.createElement('form');
+    form.innerHTML = `
+      <p class="tasks-schedule-hint">
+        Scheduling: <strong>${escapeAttr(ref.title)}</strong>${ref.estimateMinutes ? ` · ${fmtDuration(ref.estimateMinutes)}` : ''}
+      </p>
+      <label>
+        <span>Start time</span>
+        <input type="text" class="input" name="time" autocomplete="off"
+               placeholder="e.g. 10:00 AM" required autofocus>
+      </label>
+      <div class="pike-modal-actions">
+        <button type="button" class="btn" data-modal-close="1">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add to timeline</button>
+      </div>
+    `;
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const timeStr = parseFlexTime(String(new FormData(form).get('time') || '').trim());
+      if (!timeStr) { alertInlineError(form, 'Enter a valid time, e.g. 10:00 AM.'); return; }
+      const startMin = parseHHMM(timeStr);
+      if (startMin == null) return;
+      scheduleRhythmRefAt(ref, startMin);
+      global.Pike.modal.close();
+    });
+    global.Pike.modal.open({ title: 'Schedule on timeline', body: form });
+  }
+
+  // ===== Modals: event / task =====
+  function openEventModal(existing = null, defaultDate = null) {
+    const isEdit = !!existing;
+    const tk = defaultDate || todayKey();
     const initial = existing || { id: uid('evt'), title: '', date: tk, start: '', end: '' };
 
     const form = document.createElement('form');
@@ -373,11 +647,15 @@
       <div class="row" style="gap: var(--space-3);">
         <label style="flex:1;">
           <span>Start</span>
-          <input type="time" class="input" name="start" step="60" required value="${escapeAttr(initial.start)}">
+          <input type="text" class="input" name="start" required autocomplete="off"
+            placeholder="e.g. 10:00 AM"
+            value="${escapeAttr(fmtTimeInput(initial.start))}">
         </label>
         <label style="flex:1;">
           <span>End</span>
-          <input type="time" class="input" name="end" step="60" required value="${escapeAttr(initial.end)}">
+          <input type="text" class="input" name="end" required autocomplete="off"
+            placeholder="e.g. 11:30 AM"
+            value="${escapeAttr(fmtTimeInput(initial.end))}">
         </label>
       </div>
       <div class="pike-modal-actions">
@@ -392,9 +670,11 @@
       const fd = new FormData(form);
       const title = String(fd.get('title') || '').trim();
       const date  = String(fd.get('date')  || tk);
-      const start = String(fd.get('start') || '');
-      const end   = String(fd.get('end')   || '');
-      if (!title || !date || !start || !end) return;
+      const start = parseFlexTime(String(fd.get('start') || ''));
+      const end   = parseFlexTime(String(fd.get('end')   || ''));
+      if (!title) return;
+      if (!start) { alertInlineError(form, 'Enter a start time, e.g. 10:00 AM or 14:00.'); return; }
+      if (!end)   { alertInlineError(form, 'Enter an end time, e.g. 11:30 AM or 15:00.'); return; }
       const sm = parseHHMM(start);
       const em = parseHHMM(end);
       if (sm == null || em == null || em <= sm) {
@@ -470,7 +750,7 @@
       ${isEdit ? `
       <label>
         <span>Scheduled time today (optional)</span>
-        <input type="time" class="input" name="scheduledStart" step="60" value="${escapeAttr(initial.scheduledStart || '')}">
+        <input type="text" class="input" name="scheduledStart" autocomplete="off" placeholder="e.g. 2:30 PM" value="${escapeAttr(fmtTimeInput(initial.scheduledStart))}">
       </label>
       <label class="row" style="flex-direction: row; gap: var(--space-2); align-items: center;">
         <input type="checkbox" name="completed" ${initial.completedAt ? 'checked' : ''}>
@@ -506,7 +786,14 @@
         alertInlineError(form, 'Estimate should look like "30m", "1h", or "1h15".');
         return;
       }
-      const scheduledStart = isEdit ? (String(fd.get('scheduledStart') || '') || null) : (initial.scheduledStart || null);
+      const scheduledStartRaw = isEdit ? String(fd.get('scheduledStart') || '').trim() : null;
+      if (isEdit && scheduledStartRaw && !parseFlexTime(scheduledStartRaw)) {
+        alertInlineError(form, 'Enter a valid time, e.g. 2:30 PM or 14:30.');
+        return;
+      }
+      const scheduledStart = isEdit
+        ? (scheduledStartRaw ? parseFlexTime(scheduledStartRaw) : null)
+        : (initial.scheduledStart || null);
       const completed = isEdit ? !!fd.get('completed') : !!initial.completedAt;
 
       global.Pike.state.commit((d) => {
@@ -520,6 +807,11 @@
           completedAt: completed ? (initial.completedAt || new Date().toISOString()) : null,
           recurrenceId: initial.recurrenceId || null,
           category: initial.category || 'self',
+          isRhythmRef: initial.isRhythmRef || false,
+          rhythmId: initial.rhythmId || null,
+          subtaskId: initial.subtaskId || null,
+          isLibrary: initial.isLibrary || false,
+          librarySourceId: initial.librarySourceId || null,
         };
         if (isEdit) {
           const idx = d.tasks.findIndex((x) => x.id === initial.id);
@@ -528,6 +820,17 @@
           d.tasks.push(next);
         }
       });
+
+      // If completing a rhythm-linked timeline task, also mark the rhythm/subtask done
+      if (isEdit && completed && !initial.completedAt && initial.isRhythmRef && global.Pike.rhythms) {
+        const dateObj = new Date();
+        if (initial.subtaskId && global.Pike.rhythms.markSubtaskDone) {
+          global.Pike.rhythms.markSubtaskDone(initial.rhythmId, initial.subtaskId, dateObj);
+        } else if (global.Pike.rhythms.markRhythmDone) {
+          global.Pike.rhythms.markRhythmDone(initial.rhythmId, dateObj);
+        }
+      }
+
       global.Pike.modal.close();
     });
 
@@ -540,6 +843,237 @@
     });
 
     global.Pike.modal.open({ title: isEdit ? 'Edit task' : 'New task', body: form });
+  }
+
+  // ===== + Task modal (library-picker) =====
+  function openAddTaskModal() {
+    const data = getData();
+    const tk = todayKey();
+
+    // Other library tasks (not daily defaults)
+    const otherTasks = (data.tasks || []).filter((t) => t.isLibrary && !t.isDefaultDaily);
+
+    // Weekend rhythms (for "add as subtask" option)
+    const weekendRhythms = (data.rhythms || []).filter(
+      (r) => r.schedule?.type === 'weekends' && r.active
+    );
+
+    const container = document.createElement('div');
+    container.className = 'task-picker';
+
+    const libraryHTML = !otherTasks.length
+      ? `<p class="task-picker-empty">Your library is empty. Use <strong>Create new</strong> to add tasks.</p>`
+      : `<div class="task-picker-list" id="task-picker-list"></div>`;
+
+    const rhythmRadioHTML = weekendRhythms.length ? `
+      <label class="task-picker-bucket-option">
+        <input type="radio" name="bucket" value="rhythm">
+        <span>
+          <strong>Weekend Rhythm subtask</strong>
+          <span class="task-picker-bucket-desc">Adds to your weekend routine checklist</span>
+        </span>
+      </label>` : '';
+
+    const rhythmSelectHTML = weekendRhythms.length ? `
+      <div class="task-picker-rhythm-select" hidden>
+        <label>
+          <span>Add to which rhythm</span>
+          <select class="input" name="rhythmId">
+            ${weekendRhythms.map((r) => `<option value="${escapeAttr(r.id)}">${escapeAttr(r.title)}</option>`).join('')}
+          </select>
+        </label>
+      </div>` : '';
+
+    container.innerHTML = `
+      <div class="task-picker-tabs">
+        <button type="button" class="task-picker-tab is-active" data-tab="library">From library</button>
+        <button type="button" class="task-picker-tab" data-tab="new">Create new</button>
+      </div>
+
+      <div class="task-picker-panel" data-panel="library">
+        ${libraryHTML}
+      </div>
+
+      <div class="task-picker-panel" data-panel="new" hidden>
+        <form id="task-picker-form">
+          <label>
+            <span>Task name</span>
+            <input type="text" class="input" name="title" required maxlength="120" autocomplete="off"
+              placeholder="e.g. Wash car, Order groceries">
+          </label>
+          <label>
+            <span>Duration</span>
+            <input type="text" class="input" name="estimate" placeholder="30m, 1h, 1h 30m">
+          </label>
+          <fieldset class="task-picker-buckets">
+            <legend>Save to</legend>
+            <label class="task-picker-bucket-option">
+              <input type="radio" name="bucket" value="other" checked>
+              <span>
+                <strong>Other</strong>
+                <span class="task-picker-bucket-desc">Library task — add to today manually when needed</span>
+              </span>
+            </label>
+            <label class="task-picker-bucket-option">
+              <input type="radio" name="bucket" value="daily">
+              <span>
+                <strong>Daily Default</strong>
+                <span class="task-picker-bucket-desc">Auto-shows in your Flexible tray every day</span>
+              </span>
+            </label>
+            ${rhythmRadioHTML}
+          </fieldset>
+          ${rhythmSelectHTML}
+          <label class="task-picker-add-today" id="task-picker-add-today-wrap">
+            <input type="checkbox" name="addToday">
+            <span>Also add to today's tray</span>
+          </label>
+          <div class="pike-modal-actions">
+            <button type="button" class="btn" data-modal-close="1">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save to library</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    // ── Populate library list ──
+    if (otherTasks.length) {
+      const listEl = container.querySelector('#task-picker-list');
+      otherTasks.forEach((t) => {
+        const item = document.createElement('div');
+        item.className = 'task-picker-item';
+
+        const info = document.createElement('div');
+        info.className = 'task-picker-item-info';
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'task-picker-item-title';
+        titleSpan.textContent = t.title;
+        info.appendChild(titleSpan);
+        if (t.estimateMinutes) {
+          const durSpan = document.createElement('span');
+          durSpan.className = 'task-picker-item-dur';
+          durSpan.textContent = fmtDuration(t.estimateMinutes);
+          info.appendChild(durSpan);
+        }
+
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn btn-ghost btn-sm';
+
+        const alreadyAdded = (data.tasks || []).some(
+          (x) => x.librarySourceId === t.id && x.scheduledDate === tk && !x.completedAt
+        );
+        if (alreadyAdded) {
+          addBtn.textContent = '✓ In tray';
+          addBtn.disabled = true;
+        } else {
+          addBtn.textContent = 'Add to today';
+          addBtn.addEventListener('click', () => {
+            global.Pike.state.commit((d) => {
+              d.tasks = d.tasks || [];
+              d.tasks.push({
+                id: uid('tsk'),
+                title: t.title,
+                estimateMinutes: t.estimateMinutes || 30,
+                scheduledDate: tk,
+                scheduledStart: null,
+                completedAt: null,
+                isLibrary: false,
+                librarySourceId: t.id,
+                category: t.category || 'self',
+              });
+            });
+            addBtn.textContent = '✓ Added';
+            addBtn.disabled = true;
+          });
+        }
+
+        item.appendChild(info);
+        item.appendChild(addBtn);
+        listEl.appendChild(item);
+      });
+    }
+
+    // ── Tab switching ──
+    container.querySelectorAll('.task-picker-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        container.querySelectorAll('.task-picker-tab').forEach((t) => t.classList.remove('is-active'));
+        tab.classList.add('is-active');
+        const target = tab.dataset.tab;
+        container.querySelectorAll('.task-picker-panel').forEach((p) => {
+          p.hidden = p.dataset.panel !== target;
+        });
+      });
+    });
+
+    // ── Create-new form logic ──
+    const form = container.querySelector('#task-picker-form');
+    if (form) {
+      const rhythmSelectWrap = form.querySelector('.task-picker-rhythm-select');
+      const addTodayWrap = form.querySelector('#task-picker-add-today-wrap');
+
+      form.querySelectorAll('[name="bucket"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+          const v = form.querySelector('[name="bucket"]:checked')?.value;
+          if (rhythmSelectWrap) rhythmSelectWrap.hidden = v !== 'rhythm';
+          // Daily defaults auto-populate; rhythm subtasks go to the rhythm
+          if (addTodayWrap) addTodayWrap.hidden = v !== 'other';
+        });
+      });
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        const title = String(fd.get('title') || '').trim();
+        if (!title) return;
+        const estimate = parseDuration(String(fd.get('estimate') || '')) || null;
+        const bucket = fd.get('bucket') || 'other';
+        const addToday = !!fd.get('addToday') && bucket === 'other';
+        const rhythmId = fd.get('rhythmId');
+
+        if (bucket === 'rhythm') {
+          global.Pike.state.commit((d) => {
+            const rhythm = (d.rhythms || []).find((r) => r.id === rhythmId);
+            if (!rhythm) return;
+            if (!rhythm.subtasks) rhythm.subtasks = [];
+            rhythm.subtasks.push({ id: uid('sub'), title, estimateMinutes: estimate });
+          });
+        } else {
+          const libId = uid('lib');
+          global.Pike.state.commit((d) => {
+            d.tasks = d.tasks || [];
+            d.tasks.push({
+              id: libId,
+              title,
+              estimateMinutes: estimate,
+              scheduledDate: null,
+              scheduledStart: null,
+              completedAt: null,
+              isLibrary: true,
+              isDefaultDaily: bucket === 'daily',
+              category: 'self',
+            });
+            if (addToday) {
+              d.tasks.push({
+                id: uid('tsk'),
+                title,
+                estimateMinutes: estimate || 30,
+                scheduledDate: tk,
+                scheduledStart: null,
+                completedAt: null,
+                isLibrary: false,
+                librarySourceId: libId,
+                category: 'self',
+              });
+            }
+          });
+        }
+
+        global.Pike.modal.close();
+      });
+    }
+
+    global.Pike.modal.open({ title: 'Add task', body: container });
   }
 
   // ===== Helpers =====
@@ -562,9 +1096,9 @@
 
   function init() {
     document.getElementById('today-add-event')?.addEventListener('click', () => openEventModal(null));
-    document.getElementById('today-add-task')?.addEventListener('click', () => openTaskModal(null));
+    document.getElementById('today-add-task')?.addEventListener('click', () => openAddTaskModal());
   }
 
   global.Pike = global.Pike || {};
-  global.Pike.today = { init, render };
+  global.Pike.today = { init, render, openEventModal };
 })(window);

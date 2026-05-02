@@ -110,6 +110,97 @@
     }
   }
 
+  // ── Daily defaults ──────────────────────────────────────────────────────────
+  // Tasks with isDefaultDaily:true are pre-populated into today's tray each day.
+  // This replaces the old `schedule.type === 'daily'` rhythm pattern.
+
+  function runDailyDefaults() {
+    const today = todayKey();
+    const data = global.Pike.state.data;
+    const defaults = (data.tasks || []).filter((t) => t.isDefaultDaily && t.isLibrary);
+    if (!defaults.length) return;
+
+    // Only commit if something is actually missing
+    const needsCommit = defaults.some((lib) =>
+      !(data.tasks || []).some(
+        (t) => t.librarySourceId === lib.id && t.scheduledDate === today && !t.completedAt
+      )
+    );
+    if (!needsCommit) return;
+
+    global.Pike.state.commit((d) => {
+      d.tasks = d.tasks || [];
+      defaults.forEach((lib) => {
+        const exists = d.tasks.some(
+          (t) => t.librarySourceId === lib.id && t.scheduledDate === today && !t.completedAt
+        );
+        if (!exists) {
+          d.tasks.push({
+            id: `tsk_default_${lib.id}_${today}`,
+            title: lib.title,
+            estimateMinutes: lib.estimateMinutes || 30,
+            scheduledDate: today,
+            scheduledStart: null,
+            completedAt: null,
+            isLibrary: false,
+            librarySourceId: lib.id,
+            category: lib.category || 'self',
+          });
+        }
+      });
+    });
+  }
+
+  // One-time migration: moves any rhythm with schedule.type === 'daily' into
+  // isDefaultDaily library tasks and removes them from data.rhythms.
+  function migrateDailyRhythmsToDefaults() {
+    const data = global.Pike.state.data;
+    const dailyRhythms = (data.rhythms || []).filter((r) => r.schedule?.type === 'daily');
+    if (!dailyRhythms.length) return;  // already migrated
+
+    global.Pike.state.commit((d) => {
+      d.tasks = d.tasks || [];
+      d.rhythmCompletions = d.rhythmCompletions || {};
+
+      const dailyIds = new Set(dailyRhythms.map((r) => r.id));
+
+      // Create a library entry for each daily rhythm (if not already there)
+      dailyRhythms.forEach((r) => {
+        const alreadyMigrated = d.tasks.some(
+          (t) => t.isDefaultDaily && t.isLibrary && t.title === r.title
+        );
+        if (!alreadyMigrated) {
+          d.tasks.push({
+            id: 'lib-daily-' + r.id,
+            title: r.title,
+            estimateMinutes: r.estimateMinutes || 30,
+            scheduledDate: null,
+            scheduledStart: null,
+            completedAt: null,
+            isLibrary: true,
+            isDefaultDaily: true,
+            category: r.category || 'self',
+          });
+        }
+      });
+
+      // Remove daily rhythms from rhythms array
+      d.rhythms = (d.rhythms || []).filter((r) => r.schedule?.type !== 'daily');
+
+      // Remove stale rhythm completion keys for those rhythms
+      Object.keys(d.rhythmCompletions).forEach((k) => {
+        if ([...dailyIds].some((id) => k.startsWith(id + '::'))) {
+          delete d.rhythmCompletions[k];
+        }
+      });
+
+      // Remove any isRhythmRef tasks tied to the old daily rhythms
+      d.tasks = d.tasks.filter(
+        (t) => !(t.isRhythmRef && dailyIds.has(t.rhythmId))
+      );
+    });
+  }
+
   function manualRecurrences() {
     return (global.Pike.state.data.recurrences || []).filter((r) => !r.rule);
   }
@@ -137,5 +228,5 @@
   }
 
   global.Pike = global.Pike || {};
-  global.Pike.recurrence = { run, matchesToday, manualRecurrences, quickAddFromLibrary };
+  global.Pike.recurrence = { run, matchesToday, manualRecurrences, quickAddFromLibrary, runDailyDefaults, migrateDailyRhythmsToDefaults };
 })(window);

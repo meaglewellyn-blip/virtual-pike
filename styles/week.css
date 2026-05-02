@@ -1,0 +1,184 @@
+/* Virtual Pike — Week view */
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.week-range {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  min-width: 120px;
+  text-align: center;
+}
+
+/* ── Day grid ────────────────────────────────────────────────────────────────── */
+
+.week-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.week-day {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.week-day.is-today {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-1);
+}
+
+.week-day.is-past {
+  opacity: 0.6;
+}
+
+/* ── Day header ──────────────────────────────────────────────────────────────── */
+
+.week-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-2);
+}
+
+.week-day.is-today .week-day-header {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.week-day-label-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.week-day-name {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.week-day.is-today .week-day-name {
+  color: var(--accent-strong);
+}
+
+.week-day-date {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* ── Day body ────────────────────────────────────────────────────────────────── */
+
+.week-day-body {
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.week-day-empty {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  padding: var(--space-2) 0;
+  margin: 0;
+  font-style: italic;
+}
+
+/* ── Items ───────────────────────────────────────────────────────────────────── */
+
+.week-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 3px 0;
+  font-size: var(--fs-sm);
+  border-radius: var(--radius-sm);
+}
+
+.week-item-time {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  min-width: 60px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.week-item-title {
+  color: var(--text);
+  line-height: var(--lh-snug);
+}
+
+/* Event — solid left accent */
+.week-item.is-event {
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--accent);
+}
+
+.week-item.is-event .week-item-title {
+  font-weight: var(--fw-medium);
+}
+
+/* Task — dashed left accent */
+.week-item.is-task {
+  padding-left: var(--space-2);
+  border-left: 2px dashed var(--line);
+}
+
+/* Rhythm — sage accent */
+.week-item.is-rhythm {
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--sage);
+  justify-content: space-between;
+}
+
+.week-item.is-rhythm .week-item-title {
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.week-rhythm-done-btn {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--sage);
+  border-radius: 50%;
+  color: var(--sage);
+  font-size: 10px;
+  line-height: 1;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.week-item.is-rhythm:hover .week-rhythm-done-btn {
+  opacity: 1;
+}
+
+.week-rhythm-done-btn:hover {
+  background: var(--sage);
+  color: #fff;
+}
+
+.week-item.is-rhythm-unplanned {
+  opacity: 0.55;
+  font-style: italic;
+  cursor: pointer;
+  border-left-color: var(--line);
+}
+
+.week-item.is-rhythm-unplanned:hover {
+  opacity: 0.8;
+}

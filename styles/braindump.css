@@ -1,0 +1,252 @@
+/* Virtual Pike — Brain Dump */
+
+/* ── Capture ──────────────────────────────────────────────────────────────────── */
+
+.bd-capture {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5) var(--space-6);
+  margin-bottom: var(--space-5);
+  box-shadow: var(--shadow-1);
+}
+
+.bd-capture-input {
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  padding: var(--space-2) 0 var(--space-3);
+  font-size: var(--fs-base);
+  font-family: var(--font-body);
+  color: var(--text);
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease);
+  box-shadow: none;
+}
+
+.bd-capture-input::placeholder {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.bd-capture-input:focus {
+  border-bottom-color: var(--accent);
+}
+
+/* Category pills row (shown below the input) */
+.bd-capture-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+}
+
+.bd-cat-pill {
+  background: none;
+  border: 1px solid var(--line-soft);
+  border-radius: 99px;
+  padding: 3px var(--space-3);
+  font-size: var(--fs-xs);
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+}
+
+.bd-cat-pill:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.bd-cat-pill.is-selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ── Filters ─────────────────────────────────────────────────────────────────── */
+
+.bd-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.bd-filter-pill {
+  background: none;
+  border: 1px solid var(--line-soft);
+  border-radius: 99px;
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--fs-xs);
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+}
+
+.bd-filter-pill:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.bd-filter-pill.is-active {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--surface);
+}
+
+/* ── Items list ──────────────────────────────────────────────────────────────── */
+
+.bd-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.bd-empty {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  font-style: italic;
+  line-height: var(--lh-loose);
+  padding: var(--space-6) 0;
+  margin: 0;
+}
+
+/* ── Item card ───────────────────────────────────────────────────────────────── */
+
+.bd-item {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--dur-fast) var(--ease);
+  position: relative;
+}
+
+.bd-item:hover {
+  border-color: var(--line);
+}
+
+.bd-item.is-promoted {
+  opacity: 0.7;
+}
+
+.bd-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bd-item-text {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  line-height: var(--lh-base);
+  margin: 0;
+}
+
+.bd-item.is-promoted .bd-item-text {
+  text-decoration: none; /* promoted but not struck — just dimmed via opacity */
+}
+
+/* ── Item meta row ───────────────────────────────────────────────────────────── */
+
+.bd-item-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.bd-item-date {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* Promoted badge */
+.bd-promoted-badge {
+  font-size: var(--fs-xs);
+  color: var(--sage);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.02em;
+}
+
+/* ── Category badges ─────────────────────────────────────────────────────────── */
+
+.bd-cat-badge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: 99px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.03em;
+}
+
+.bd-cat-uncategorized { background: color-mix(in srgb, var(--text-faint) 12%, transparent); color: var(--text-muted); }
+.bd-cat-shows         { background: color-mix(in srgb, #9b87d1 15%, transparent); color: #6b5da0; }
+.bd-cat-books         { background: color-mix(in srgb, #d4956a 15%, transparent); color: #a05a28; }
+.bd-cat-podcasts      { background: color-mix(in srgb, #5ba3b0 15%, transparent); color: #2e7a87; }
+.bd-cat-writing       { background: color-mix(in srgb, var(--sage) 18%, transparent); color: #5a7852; }
+.bd-cat-claude-projects { background: color-mix(in srgb, var(--accent) 15%, transparent); color: #8a5652; }
+.bd-cat-places        { background: color-mix(in srgb, #6a98c8 15%, transparent); color: #3a6898; }
+.bd-cat-other         { background: color-mix(in srgb, var(--text-muted) 12%, transparent); color: var(--text-muted); }
+
+/* ── Item actions (shown on hover) ───────────────────────────────────────────── */
+
+.bd-item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.bd-item:hover .bd-item-actions {
+  opacity: 1;
+}
+
+.bd-action-btn {
+  background: none;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  padding: 3px var(--space-3);
+  font-size: var(--fs-xs);
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+
+.bd-action-btn:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.bd-action-delete:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Promote modal extras ────────────────────────────────────────────────────── */
+
+.bd-promote-source {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0 0 var(--space-4);
+  line-height: var(--lh-base);
+}
+
+.bd-edit-textarea {
+  resize: vertical;
+  min-height: 72px;
+}

@@ -16,13 +16,14 @@
 
   const PUSH_DEBOUNCE_MS = 600;
   // Window during which incoming realtime broadcasts are ignored after a
-  // local commit. Prevents a stale broadcast (e.g. queued from an earlier
-  // server change) from clobbering an edit the user just made.
-  const REALTIME_IGNORE_AFTER_LOCAL_COMMIT_MS = 4000;
+  // local commit. Belt-and-suspenders guard; the primary staleness check is
+  // timestamp-based (lastPushedAt vs payload.new.updated_at).
+  const REALTIME_IGNORE_AFTER_LOCAL_COMMIT_MS = 10000;
 
   let client = null;
   let pushTimer = null;
   let lastPushedJson = null;
+  let lastPushedAt = null;   // ISO string; set after each successful upsert
   let mode = 'local';  // 'local' | 'syncing' | 'online'
 
   function isConfigured() {
@@ -37,6 +38,7 @@
   }
 
   function init() {
+    if (client) return;  // already initialised — prevent duplicate subscriptions
     if (!isConfigured()) {
       console.info('Pike: Supabase not configured — running in local-only mode.');
       setMode('local');
@@ -92,9 +94,13 @@
           const incoming = JSON.stringify(payload.new.data);
           // Echo of our own push — already represented in state.
           if (incoming === lastPushedJson) return;
-          // The user has unsaved/in-flight local edits; the broadcast might be
-          // stale (e.g. queued from an earlier server change). Ignore it. Once
-          // the local edit settles and we push, the next broadcast will reconcile.
+          // Primary staleness check: if this broadcast's row timestamp is at or
+          // before our last successful push, it's either our own echo or a delayed
+          // broadcast of an older state — ignore it in both cases.
+          if (lastPushedAt && payload.new.updated_at && payload.new.updated_at <= lastPushedAt) return;
+          // Secondary guard: the user has unsaved/in-flight local edits within
+          // the ignore window — skip to avoid stomping on an edit that hasn't
+          // been pushed yet.
           const sinceLocal = Date.now() - (global.Pike.state.lastLocalCommitAt || 0);
           if (sinceLocal < REALTIME_IGNORE_AFTER_LOCAL_COMMIT_MS) return;
           global.Pike.state.replace(payload.new.data);
@@ -113,12 +119,14 @@
     setMode('syncing');
     const rowId = global.Pike.state.rowId;
     const serialized = JSON.stringify(data);
+    const pushedAt = new Date().toISOString();
     try {
       const { error } = await client
         .from('app_state')
-        .upsert({ id: rowId, data, updated_at: new Date().toISOString() });
+        .upsert({ id: rowId, data, updated_at: pushedAt });
       if (error) { console.warn('Pike: push failed', error); setMode('online'); return; }
       lastPushedJson = serialized;
+      lastPushedAt = pushedAt;
       setMode('online');
     } catch (e) {
       console.warn('Pike: push threw', e);

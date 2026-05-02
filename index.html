@@ -20,7 +20,14 @@
   <link rel="stylesheet" href="styles/base.css">
   <link rel="stylesheet" href="styles/components.css">
   <link rel="stylesheet" href="styles/sidebar.css">
-  <link rel="stylesheet" href="styles/today.css">
+  <link rel="stylesheet" href="styles/today.css?v=3">
+  <link rel="stylesheet" href="styles/week.css">
+  <link rel="stylesheet" href="styles/rhythms.css">
+  <link rel="stylesheet" href="styles/travel.css">
+  <link rel="stylesheet" href="styles/people.css">
+  <link rel="stylesheet" href="styles/tasks.css">
+  <link rel="stylesheet" href="styles/braindump.css">
+  <link rel="stylesheet" href="styles/gcal.css">
   <link rel="stylesheet" href="styles/auth.css">
 </head>
 <body class="pike-locked">
@@ -56,6 +63,7 @@
           <li><a href="#today"     class="nav-link" data-section="today"><span class="nav-dot"></span>Today</a></li>
           <li><a href="#week"      class="nav-link" data-section="week"><span class="nav-dot"></span>Week</a></li>
           <li><a href="#rhythms"   class="nav-link" data-section="rhythms"><span class="nav-dot"></span>Rhythms</a></li>
+          <li><a href="#travel"    class="nav-link" data-section="travel"><span class="nav-dot"></span>Travel</a></li>
           <li><a href="#people"    class="nav-link" data-section="people"><span class="nav-dot"></span>People</a></li>
           <li><a href="#braindump" class="nav-link" data-section="braindump"><span class="nav-dot"></span>Brain Dump</a></li>
           <li><a href="#tasks"     class="nav-link" data-section="tasks"><span class="nav-dot"></span>Tasks</a></li>
@@ -85,10 +93,17 @@
             </div>
             <div class="today-anchor-input">
               <label for="today-workday-start">Starting work today at</label>
-              <input id="today-workday-start" type="time" step="900">
+              <input id="today-workday-start" type="time" step="60">
               <span class="muted">(saved per day)</span>
             </div>
           </div>
+
+          <div id="today-weather" class="today-weather" hidden></div>
+
+          <div id="today-quote-card" class="today-quote-card" hidden></div>
+
+          <div id="today-people-events" class="today-people-events" hidden></div>
+          <div id="today-trip-prep" class="today-trip-prep" hidden></div>
 
           <div class="today-grid">
             <section class="today-timeline-wrap">
@@ -116,65 +131,71 @@
         <section id="section-week" class="section">
           <header class="section-header">
             <h1>Week</h1>
-            <span class="section-meta">Phase 4</span>
+            <div class="week-nav">
+              <button id="week-prev" class="btn btn-ghost btn-sm" type="button">‹</button>
+              <span id="week-range" class="week-range"></span>
+              <button id="week-next" class="btn btn-ghost btn-sm" type="button">›</button>
+              <button id="week-review-btn" class="btn btn-ghost btn-sm" type="button">This Week in Review</button>
+            </div>
           </header>
-          <div class="placeholder-card">
-            <div class="placeholder-eyebrow">Coming soon</div>
-            <h3>Week-at-a-glance</h3>
-            <p>Upcoming events, dinners and social plans, prep tasks tied to events, and the recurring rhythms that matter this week.</p>
-          </div>
+          <div id="week-review" class="week-review-card" hidden></div>
+          <div id="week-grid" class="week-grid"></div>
         </section>
 
         <!-- RHYTHMS -->
         <section id="section-rhythms" class="section">
           <header class="section-header">
             <h1>Rhythms</h1>
-            <span class="section-meta">Phase 5</span>
           </header>
-          <div class="placeholder-card">
-            <div class="placeholder-eyebrow">Coming soon</div>
-            <h3>Routines &amp; workout sequence</h3>
-            <p>Recurring patterns like home group every Thursday, daily step goal, weekend reset. Workout split as a "next up" sequence — not locked to weekdays.</p>
+
+          <!-- Workout sequence -->
+          <div id="rhythms-workout"></div>
+
+          <!-- Weekly routines -->
+          <div class="rhythms-routines">
+            <header class="rhythms-routines-header">
+              <h2 class="rhythms-section-title">Weekly routines</h2>
+              <button id="rhythms-add" class="btn btn-ghost btn-sm" type="button">+ Add</button>
+            </header>
+            <div id="rhythms-list" class="rhythms-list"></div>
+            <p id="rhythms-empty" class="rhythms-empty" hidden>
+              No routines yet. Tap <strong>+&nbsp;Add</strong> to track a recurring commitment.
+            </p>
           </div>
+        </section>
+
+        <!-- TRAVEL -->
+        <section id="section-travel" class="section">
+          <header class="section-header">
+            <h1>Travel</h1>
+            <button id="travel-new-trip" class="btn btn-ghost btn-sm" type="button">+ New Trip</button>
+          </header>
+          <div id="travel-content"></div>
         </section>
 
         <!-- PEOPLE -->
         <section id="section-people" class="section">
           <header class="section-header">
             <h1>People</h1>
-            <span class="section-meta">Phase 6</span>
+            <button id="people-add" class="btn btn-ghost btn-sm" type="button">+ Add</button>
           </header>
-          <div class="placeholder-card">
-            <div class="placeholder-eyebrow">Coming soon</div>
-            <h3>Connection pulse</h3>
-            <p>Sponsees and important people with cadence tracking. Quick view of who you've talked to recently and who may need a check-in.</p>
-          </div>
+          <div id="people-list"></div>
         </section>
 
         <!-- BRAIN DUMP -->
         <section id="section-braindump" class="section">
           <header class="section-header">
             <h1>Brain Dump</h1>
-            <span class="section-meta">Phase 7</span>
           </header>
-          <div class="placeholder-card">
-            <div class="placeholder-eyebrow">Coming soon</div>
-            <h3>Someday, safely captured</h3>
-            <p>Shows, books, podcasts, writing ideas, Claude projects, places to go. Quick capture, lightly categorized, easy to revisit and promote into real plans.</p>
-          </div>
+          <div id="braindump-content"></div>
         </section>
 
         <!-- TASKS -->
         <section id="section-tasks" class="section">
           <header class="section-header">
             <h1>Tasks</h1>
-            <span class="section-meta">Phase 3</span>
           </header>
-          <div class="placeholder-card">
-            <div class="placeholder-eyebrow">Coming next</div>
-            <h3>Tasks, recurrences &amp; templates</h3>
-            <p>Real one-off tasks, recurring life tasks (groceries, laundry, wash hair, vacuum), and reusable templates (Trip Prep, Dog Sitter Prep, Weekend Reset).</p>
-          </div>
+          <div id="tasks-content"></div>
         </section>
 
         <!-- QUOTES -->
@@ -194,8 +215,16 @@
         <section id="section-settings" class="section">
           <header class="section-header">
             <h1>Settings</h1>
-            <span class="section-meta">Foundation</span>
           </header>
+
+          <div class="settings-card">
+            <h3 class="settings-section-title">Google Calendar</h3>
+            <p class="settings-desc">Connect your calendars to see events in Today and Week views. Each syncs independently — connect one or both.</p>
+            <div id="gcal-settings" class="gcal-settings-list">
+              <!-- Rendered by gcal.js -->
+            </div>
+          </div>
+
           <div class="placeholder-card">
             <div class="placeholder-eyebrow">Configurable later</div>
             <h3>Defaults</h3>
@@ -229,13 +258,22 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <!-- App scripts (order matters: auth → state → router → db → recurrence → today → app) -->
-  <script src="js/auth.js"></script>
-  <script src="js/state.js"></script>
-  <script src="js/router.js"></script>
-  <script src="js/db.js"></script>
-  <script src="js/modal.js"></script>
-  <script src="js/recurrence.js"></script>
-  <script src="js/today.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/auth.js?v=2"></script>
+  <script src="js/state.js?v=2"></script>
+  <script src="js/router.js?v=2"></script>
+  <script src="js/db.js?v=2"></script>
+  <script src="js/modal.js?v=2"></script>
+  <script src="js/recurrence.js?v=2"></script>
+  <script src="js/today.js?v=3"></script>
+  <script src="js/week.js?v=2"></script>
+  <script src="js/rhythms.js?v=2"></script>
+  <script src="js/travel.js?v=2"></script>
+  <script src="js/people.js?v=2"></script>
+  <script src="js/tasks.js?v=2"></script>
+  <script src="js/braindump.js?v=1"></script>
+  <script src="js/quotes.js?v=2"></script>
+  <script src="js/gcal.js?v=1"></script>
+  <script src="js/weather.js?v=2"></script>
+  <script src="js/app.js?v=2"></script>
 </body>
 </html>

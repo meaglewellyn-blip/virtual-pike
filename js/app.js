@@ -99,6 +99,12 @@
         : 'Starting work today at';
     }
 
+    // Toggle a class so CSS can style the weekend-with-no-override state distinctly
+    const anchorInputRow = document.querySelector('.today-anchor-input');
+    if (anchorInputRow) {
+      anchorInputRow.classList.toggle('is-weekend-open', weekend && !hasOverride);
+    }
+
     if (textEl) {
       if (weekend && !hasOverride) {
         const dayName = weekendDayName(now);
@@ -174,19 +180,51 @@
     if (Pike.router) Pike.router.init();
     if (Pike.modal) Pike.modal.init();
     if (Pike.today) Pike.today.init();
+    if (Pike.week) Pike.week.init();
+    if (Pike.rhythms) Pike.rhythms.init();
+    if (Pike.travel) Pike.travel.init();
+    if (Pike.people) Pike.people.init();
+    if (Pike.tasks) Pike.tasks.init();
+    if (Pike.braindump) Pike.braindump.init();
+    if (Pike.quotes) Pike.quotes.init();
+    if (Pike.gcal) Pike.gcal.init();
 
     wireSyncIndicator();
     wireWorkdayInput();
     renderTodayPlaceholder();
+    // Migrate daily rhythms → daily-default tasks (idempotent, runs once)
+    if (Pike.recurrence) Pike.recurrence.migrateDailyRhythmsToDefaults();
     if (Pike.recurrence) Pike.recurrence.run();
+    if (Pike.recurrence) Pike.recurrence.runDailyDefaults();
     if (Pike.today) Pike.today.render();
+    if (Pike.week) Pike.week.render();
+    if (Pike.rhythms) Pike.rhythms.render();
+    if (Pike.travel) Pike.travel.render();
+    if (Pike.people) Pike.people.render();
+    if (Pike.tasks) Pike.tasks.render();
+    if (Pike.braindump) Pike.braindump.render();
+    if (Pike.quotes) Pike.quotes.render();
+    if (Pike.gcal) Pike.gcal.render();
+    if (Pike.weather) Pike.weather.load();
 
     Pike.state.on(() => {
       renderTodayPlaceholder();
       // Run recurrence engine on every state change. It's idempotent — most
       // calls are a quick no-op once today's tasks are already generated.
+      if (Pike.recurrence) Pike.recurrence.migrateDailyRhythmsToDefaults();
       if (Pike.recurrence) Pike.recurrence.run();
+      if (Pike.recurrence) Pike.recurrence.runDailyDefaults();
       if (Pike.today) Pike.today.render();
+      // quotes.init() is idempotent — seeds only if quotes array is missing or empty.
+      // Running it here ensures quotes survive a db pullOnce replacing state.
+      if (Pike.week) Pike.week.render();
+      if (Pike.rhythms) { Pike.rhythms.init(); Pike.rhythms.render(); }
+      if (Pike.travel) Pike.travel.render();
+      if (Pike.people) { Pike.people.init(); Pike.people.render(); }
+      if (Pike.tasks) Pike.tasks.render();
+      if (Pike.braindump) Pike.braindump.render();
+      if (Pike.quotes) { Pike.quotes.init(); Pike.quotes.render(); }
+      if (Pike.gcal) Pike.gcal.render();
     });
 
     setInterval(tick, 60_000);

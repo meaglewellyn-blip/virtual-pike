@@ -1,0 +1,483 @@
+/* Virtual Pike — Travel module */
+
+/* ── Empty state ─────────────────────────────────────────────────────────────── */
+
+.travel-empty {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  font-style: italic;
+  padding: var(--space-4) 0;
+}
+
+/* ── Trip cards (dashboard) ──────────────────────────────────────────────────── */
+
+.trip-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.trip-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-1);
+}
+
+.trip-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trip-card-name {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+}
+
+.trip-card-dest {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.trip-card-meta {
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.trip-card-countdown {
+  color: var(--accent-strong);
+  font-weight: var(--fw-medium);
+}
+
+.trip-card-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+/* Status badge */
+.trip-status-badge {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-weight: var(--fw-medium);
+}
+
+.trip-status-badge.is-upcoming {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-strong);
+}
+
+.trip-status-badge.is-active {
+  background: color-mix(in srgb, var(--sage) 12%, transparent);
+  color: #4a5e44;
+}
+
+.trip-status-badge.is-past {
+  background: var(--surface-2);
+  color: var(--text-faint);
+}
+
+/* Mini progress bar on card */
+.trip-pack-mini {
+  width: 80px;
+  height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.trip-pack-mini-bar {
+  height: 100%;
+  background: var(--sage);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.trip-pack-mini-label {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* ── Back button ─────────────────────────────────────────────────────────────── */
+
+.travel-back-btn {
+  margin-bottom: var(--space-4);
+}
+
+/* ── Trip detail header ──────────────────────────────────────────────────────── */
+
+.trip-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.trip-detail-name {
+  font-family: var(--font-serif);
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  color: var(--text);
+  margin: 0 0 2px;
+  line-height: 1.2;
+}
+
+.trip-detail-dest {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.trip-detail-dates {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+/* ── Section cards ───────────────────────────────────────────────────────────── */
+
+.trip-section-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.trip-section-title {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0 0 var(--space-3);
+}
+
+/* ── Quantities grid ─────────────────────────────────────────────────────────── */
+
+.trip-quantities-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 600px) {
+  .trip-quantities-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.trip-qty-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.trip-qty-field span {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.trip-qty-input {
+  text-align: center;
+  font-size: var(--fs-base);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Outfit summary */
+.trip-outfit-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px var(--space-4);
+  align-items: baseline;
+}
+
+.trip-outfit-label {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.trip-outfit-val {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.trip-outfit-empty {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  font-style: italic;
+  margin: 0;
+}
+
+/* ── Supplements grid ────────────────────────────────────────────────────────── */
+
+.trip-supps-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.supp-col-label {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: var(--space-2);
+  font-weight: var(--fw-medium);
+}
+
+.supp-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 3px 0;
+  gap: var(--space-3);
+  font-size: var(--fs-sm);
+}
+
+.supp-name { color: var(--text-muted); }
+
+.supp-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.supp-opt {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.supp-row.is-optional .supp-name { color: var(--text-faint); }
+
+/* ── Pre-trip checklists ─────────────────────────────────────────────────────── */
+
+.pretripcheck-section { }
+
+.pretripcheck-header {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: var(--fw-medium);
+  margin-bottom: var(--space-2);
+}
+
+/* ── Packing list ────────────────────────────────────────────────────────────── */
+
+.packing-header-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.packing-progress-label {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.packing-progress-bar-wrap {
+  height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: var(--space-4);
+}
+
+.packing-progress-bar {
+  height: 100%;
+  background: var(--sage);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.packing-category {
+  margin-bottom: var(--space-4);
+}
+
+.packing-cat-label {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: var(--fw-medium);
+  margin-bottom: var(--space-2);
+}
+
+.packing-cat-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Shared pack-item (used in detail + pre-trip) */
+.pack-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+  user-select: none;
+}
+
+.pack-item:hover {
+  border-color: var(--sage);
+}
+
+.pack-item.is-checked {
+  background: color-mix(in srgb, var(--sage) 10%, var(--surface));
+  border-color: var(--sage);
+  color: var(--text);
+}
+
+.pack-item input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--sage);
+  flex-shrink: 0;
+}
+
+.pack-count {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* ── Today trip prep card ────────────────────────────────────────────────────── */
+
+.today-trip-prep-card {
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.trip-prep-eyebrow {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  margin-bottom: var(--space-3);
+}
+
+.trip-prep-section {
+  margin-bottom: var(--space-3);
+}
+
+.trip-prep-section-title {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-2);
+}
+
+.trip-prep-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  margin: 2px 4px 2px 0;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+  user-select: none;
+}
+
+.trip-prep-item.is-checked {
+  background: color-mix(in srgb, var(--sage) 10%, var(--surface));
+  border-color: var(--sage);
+  color: var(--text-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-faint);
+}
+
+.trip-prep-item input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  accent-color: var(--sage);
+  flex-shrink: 0;
+}
+
+/* ── Week view additions ─────────────────────────────────────────────────────── */
+
+.week-item.is-trip {
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--accent);
+  color: var(--accent-strong);
+  font-style: italic;
+}
+
+.week-item.is-trip .week-item-title {
+  color: var(--accent-strong);
+}
+
+/* ── Weekly review card ──────────────────────────────────────────────────────── */
+
+.week-review-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.week-review-title {
+  font-family: var(--font-serif);
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  color: var(--text);
+  margin: 0 0 var(--space-3);
+}
+
+.week-review-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.week-review-line {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  line-height: var(--lh-loose);
+}
+
+.week-review-empty {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  font-style: italic;
+}

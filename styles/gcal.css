@@ -1,0 +1,143 @@
+/* Virtual Pike — Google Calendar styles */
+
+/* ── Settings: source rows ─────────────────────────────────────────────────── */
+
+.settings-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5) var(--space-6);
+  margin-bottom: var(--space-5);
+  box-shadow: var(--shadow-1);
+}
+
+.settings-section-title {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  margin: 0 0 var(--space-2);
+}
+
+.settings-desc {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-4);
+  line-height: var(--lh-base);
+}
+
+.gcal-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.gcal-source-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+}
+
+.gcal-source-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.gcal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.gcal-source-label {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+}
+
+.gcal-source-email {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.gcal-source-sync {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+.gcal-source-btns {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.gcal-btn-disconnect {
+  color: var(--text-faint);
+}
+
+/* ── Timeline: gcal event blocks ────────────────────────────────────────────── */
+
+.tl-block-gcal {
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border-style: solid;
+  border-width: 1.5px;
+  cursor: default;
+}
+
+.tl-block-gcal[data-source="personal"] { border-color: #9b87d1; }
+.tl-block-gcal[data-source="work"]     { border-color: #5ba3b0; }
+
+.tl-block-gcal .tl-block-title {
+  font-weight: var(--fw-normal);
+}
+
+/* Source badge — bottom-right corner of the block */
+.tl-block-src-badge {
+  position: absolute;
+  bottom: 3px;
+  right: 6px;
+  font-size: 9px;
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.tl-block-gcal[data-source="personal"] .tl-block-src-badge { color: #9b87d1; }
+.tl-block-gcal[data-source="work"]     .tl-block-src-badge { color: #5ba3b0; }
+
+/* ── Week view: gcal items ──────────────────────────────────────────────────── */
+
+.week-item.is-gcal {
+  opacity: 0.9;
+}
+
+.week-item.is-gcal[data-source="personal"] { border-left: 2.5px solid #9b87d1; }
+.week-item.is-gcal[data-source="work"]     { border-left: 2.5px solid #5ba3b0; }
+
+.week-gcal-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-right: 2px;
+  vertical-align: middle;
+}
+
+.week-item.is-gcal[data-source="personal"] .week-gcal-dot { background: #9b87d1; }
+.week-item.is-gcal[data-source="work"]     .week-gcal-dot { background: #5ba3b0; }
+
+.week-item.is-gcal.is-allday {
+  font-style: italic;
+  opacity: 0.75;
+}
