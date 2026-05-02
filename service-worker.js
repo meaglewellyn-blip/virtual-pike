@@ -1,5 +1,5 @@
 /* Virtual Pike — minimal service worker (offline app shell) */
-const CACHE_VERSION = 'pike-v5';
+const CACHE_VERSION = 'pike-v6';
 const APP_SHELL = [
   './',
   './index.html',
@@ -44,17 +44,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Network-first: always try the network, fall back to cache offline.
+  // Successful same-origin responses are cached so the app still loads
+  // when the user is offline.
   event.respondWith(
-    caches.match(req).then((cached) => {
-      const networkFetch = fetch(req).then((response) => {
-        // Only cache successful same-origin responses
-        if (response.ok && url.origin === self.location.origin) {
-          const copy = response.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy)).catch(() => {});
-        }
-        return response;
-      }).catch(() => cached);
-      return cached || networkFetch;
-    })
+    fetch(req).then((response) => {
+      if (response.ok && url.origin === self.location.origin) {
+        const copy = response.clone();
+        caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy)).catch(() => {});
+      }
+      return response;
+    }).catch(() => caches.match(req))
   );
 });
