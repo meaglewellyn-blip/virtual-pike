@@ -362,6 +362,21 @@
       }
     });
 
+    // ── 7. Reminders cleared ───────────────────────────────────────────────
+    // Count reminders where completedAt falls within the reviewed week.
+    // Archived-only and still-active reminders are excluded.
+    const clearedReminders = (data.reminders || []).filter((r) => {
+      const d = r.completedAt?.slice(0, 10);
+      return d && d >= startKey && d <= endKey;
+    });
+    if (clearedReminders.length === 1) {
+      lines.push(`You cleared 1 reminder this week.`);
+    } else if (clearedReminders.length <= 4) {
+      lines.push(`You cleared ${clearedReminders.length} reminders this week: ${andList(clearedReminders.map((r) => r.text))}.`);
+    } else if (clearedReminders.length > 4) {
+      lines.push(`You cleared ${clearedReminders.length} reminders this week.`);
+    }
+
     return lines;
   }
 

@@ -1,6 +1,6 @@
 # Virtual Pike — Source of Truth
 
-**Version:** Based on live codebase as of 2026-05-03 (service worker `pike-v23`)  
+**Version:** Based on live codebase as of 2026-05-03 (service worker `pike-v24`)  
 **Purpose:** Canonical behavioral, architectural, and diagnostic reference for the live app. Use this document before touching any code or diagnosing any bug.
 
 ---
@@ -210,7 +210,7 @@ For each active rhythm matching the day's schedule:
 
 Generates an array of plain-English sentence strings. Each string is a complete grammatical sentence. **Never emit a partial fragment.** If the condition that would produce a sentence is not met, skip it entirely.
 
-**Six categories of review lines (in order):**
+**Seven categories of review lines (in order):**
 
 1. **Workouts** — from `data.workoutSequence.history`. Filtered to `completedAt[0:10]` within the week range.
    - 1 workout: `"You got your workout in — [type]."`
@@ -245,6 +245,12 @@ Generates an array of plain-English sentence strings. Each string is a complete 
 
 6. **Trip prep** — any trip with `checklist3Day` or `checklistNight` items checked.
    - `"[Trip name] prep is moving — [N] item[s] checked off."`
+
+7. **Reminders cleared** — from `data.reminders[]`, filtered to items where `completedAt[0:10]` falls within the week range. Archived-only and still-active reminders are excluded; only items with a `completedAt` date are counted.
+   - 1: `"You cleared 1 reminder this week."`
+   - 2–4: `"You cleared [N] reminders this week: [and-list of text]."`
+   - 5+: `"You cleared [N] reminders this week."`
+   - 0: nothing.
 
 **Empty state:** If `lines.length === 0`, render: `"Nothing tracked yet this week — check back after you've logged some activity."`
 
@@ -963,7 +969,7 @@ These behaviors must never be broken by future refactors, regardless of what the
 
 10. **`data.travelTemplates` must be initialized exactly once** (when null), using `DEFAULT_TEMPLATES` from `travel.js`. Never reinitialize if it already exists — this would wipe template customizations.
 
-11. **The service worker cache version must be bumped whenever CSS or JS files change.** Current version: `pike-v23`. CSS query-string versions (`?v=N`) in `index.html` bust the service worker's network-first cache fetch. Both must be updated together.
+11. **The service worker cache version must be bumped whenever CSS or JS files change.** Current version: `pike-v24`. CSS query-string versions (`?v=N`) in `index.html` bust the service worker's network-first cache fetch. Both must be updated together.
 
 12. **`state.commit()` must be the only path for mutating `state.data`.** Direct assignment to `state.data.someProperty` will not trigger `saveToLocal()`, will not emit the change event, and will not schedule a Supabase push.
 
