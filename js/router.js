@@ -3,7 +3,7 @@
 (function (global) {
   'use strict';
 
-  const SECTIONS = ['today', 'week', 'rhythms', 'travel', 'people', 'braindump', 'tasks', 'quotes', 'settings'];
+  const SECTIONS = ['today', 'week', 'rhythms', 'travel', 'people', 'reminders', 'braindump', 'tasks', 'quotes', 'settings'];
   const DEFAULT = 'today';
 
   function currentSection() {

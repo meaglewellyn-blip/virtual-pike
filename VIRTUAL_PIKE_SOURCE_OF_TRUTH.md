@@ -1,6 +1,6 @@
 # Virtual Pike — Source of Truth
 
-**Version:** Based on live codebase as of 2026-05-03 (service worker `pike-v22`)  
+**Version:** Based on live codebase as of 2026-05-03 (service worker `pike-v23`)  
 **Purpose:** Canonical behavioral, architectural, and diagnostic reference for the live app. Use this document before touching any code or diagnosing any bug.
 
 ---
@@ -853,7 +853,15 @@ This regression has appeared in two places. Both are fixed and both must stay fi
 **Affected files:** `js/recurrence.js`, `js/app.js`  
 **Correct behavior:** `migrateDailyRhythmsToDefaults()` runs in `boot()` before first render AND on every state change (in the `state.on()` listener). After migration, `d.rhythms` contains no records with `schedule.type === 'daily'`.
 
-### Regression 6: runDailyDefaults() Blocking pullOnce()
+### Regression 6: New Nav Section Not Routable (Missing SECTIONS Entry)
+
+**Symptom:** Clicking a new sidebar nav link does nothing — the app silently stays on Today (or the current section). The nav item highlights briefly or not at all.  
+**Root cause:** `router.js` has a hardcoded `SECTIONS` allowlist. `activate(section)` calls `SECTIONS.includes(section)` and falls back to `DEFAULT` (`'today'`) if the name is not in the list. Adding a nav link and section container in `index.html` without updating `SECTIONS` leaves the route dead.  
+**Affected files:** `js/router.js`  
+**Correct behavior:** Every `data-section` value in `index.html` nav links must appear in the `SECTIONS` array. Current array: `['today', 'week', 'rhythms', 'travel', 'people', 'reminders', 'braindump', 'tasks', 'quotes', 'settings']`.  
+**Regression trigger:** Adding a new section to `index.html` without adding its hash to `SECTIONS` in `router.js`.
+
+### Regression 7: runDailyDefaults() Blocking pullOnce()
 
 **Symptom:** After fix to sync using `updated_at`, boot-time `runDailyDefaults()` commits appear to reset state.  
 **Root cause (historical, now resolved):** When `_localTs` was on state data, `runDailyDefaults()` commits would stamp a new `_localTs`, making local data appear newer than remote.  
@@ -955,7 +963,7 @@ These behaviors must never be broken by future refactors, regardless of what the
 
 10. **`data.travelTemplates` must be initialized exactly once** (when null), using `DEFAULT_TEMPLATES` from `travel.js`. Never reinitialize if it already exists — this would wipe template customizations.
 
-11. **The service worker cache version must be bumped whenever CSS or JS files change.** Current version: `pike-v22`. CSS query-string versions (`?v=N`) in `index.html` bust the service worker's network-first cache fetch. Both must be updated together.
+11. **The service worker cache version must be bumped whenever CSS or JS files change.** Current version: `pike-v23`. CSS query-string versions (`?v=N`) in `index.html` bust the service worker's network-first cache fetch. Both must be updated together.
 
 12. **`state.commit()` must be the only path for mutating `state.data`.** Direct assignment to `state.data.someProperty` will not trigger `saveToLocal()`, will not emit the change event, and will not schedule a Supabase push.
 
