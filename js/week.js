@@ -231,51 +231,122 @@
     const isoWeek  = global.Pike.rhythms ? global.Pike.rhythms.getISOWeekKey(weekDates[0]) : null;
     const lines = [];
 
-    // Workouts
+    // ── Helpers ────────────────────────────────────────────────────────────
+    function firstName(p) { return p.name ? p.name.split(' ')[0] : p; }
+    function andList(arr) {
+      if (!arr.length) return '';
+      if (arr.length === 1) return arr[0];
+      if (arr.length === 2) return arr[0] + ' and ' + arr[1];
+      return arr.slice(0, -1).join(', ') + ', and ' + arr[arr.length - 1];
+    }
+    function humanWorkout(type) {
+      const map = {
+        'lower-body': 'lower body', 'upper-push': 'push day', 'upper-pull': 'pull day',
+        'lower body': 'lower body', 'push': 'push day', 'pull': 'pull day',
+        'full-body': 'full body', 'cardio': 'cardio',
+      };
+      return map[String(type).toLowerCase()] || type;
+    }
+    const nums = ['once','twice','three times','four times','five times','six times','seven times'];
+    function timesWord(n) { return nums[n - 1] || `${n} times`; }
+
+    // ── 1. Workouts ────────────────────────────────────────────────────────
     const workouts = (data.workoutSequence?.history || [])
-      .filter((h) => {
-        const d = h.completedAt?.slice(0, 10);
-        return d && d >= startKey && d <= endKey;
-      });
-    if (workouts.length) {
-      lines.push(`You completed ${workouts.length} workout${workouts.length > 1 ? 's' : ''} this week.`);
+      .filter((h) => { const d = h.completedAt?.slice(0, 10); return d && d >= startKey && d <= endKey; });
+    if (workouts.length === 1) {
+      lines.push(`You got your workout in — ${humanWorkout(workouts[0].type)}.`);
+    } else if (workouts.length > 1 && workouts.length <= 4) {
+      const types = workouts.map((w) => humanWorkout(w.type));
+      lines.push(`You trained ${timesWord(workouts.length)} — ${andList(types)}.`);
+    } else if (workouts.length > 4) {
+      lines.push(`You trained ${workouts.length} times this week.`);
     }
 
-    // Rhythms completed this period
-    if (isoWeek) {
-      const completions = data.rhythmCompletions || {};
-      const rhythmsDone = (data.rhythms || []).filter((r) =>
-        completions[r.id + '::' + isoWeek] === true
-      );
-      if (rhythmsDone.length) {
-        lines.push(`You kept up with ${rhythmsDone.length} regular routine${rhythmsDone.length > 1 ? 's' : ''}.`);
-      }
-    }
-
-    // People contacted
+    // ── 2. People / sponsees ───────────────────────────────────────────────
     const contacted = (data.people || []).filter((p) =>
       (p.contactLog || []).some((e) => e.date >= startKey && e.date <= endKey)
     );
     if (contacted.length) {
-      const names = contacted.map((p) => p.name.split(' ')[0]).join(', ');
-      lines.push(`You connected with ${contacted.length} ${contacted.length > 1 ? 'people' : 'person'} — ${names}.`);
+      const sponsees = contacted.filter((p) => p.relationship === 'sponsee');
+      const others   = contacted.filter((p) => p.relationship !== 'sponsee');
+      if (sponsees.length && !others.length) {
+        const label = sponsees.length === 1 ? 'your sponsee' : `your ${sponsees.length} sponsees`;
+        lines.push(`You connected with ${label} — ${andList(sponsees.map(firstName))}.`);
+      } else if (sponsees.length && others.length) {
+        lines.push(`You stayed close to your people this week — ${andList(contacted.map(firstName))}.`);
+      } else if (others.length === 1) {
+        lines.push(`You stayed in touch with ${firstName(others[0])} this week.`);
+      } else {
+        lines.push(`You connected with ${andList(others.map(firstName))} this week.`);
+      }
     }
 
-    // Tasks completed
-    const tasksDone = (data.tasks || []).filter((t) => {
+    // ── 3. Weekend rhythm subtask completions ─────────────────────────────
+    if (isoWeek) {
+      const completions = data.rhythmCompletions || {};
+      const weekendRhythms = (data.rhythms || []).filter(
+        (r) => r.active && r.schedule?.type === 'weekends' && r.subtasks?.length
+      );
+      const doneSubtaskTitles = [];
+      weekendRhythms.forEach((r) => {
+        (r.subtasks || []).forEach((sub) => {
+          if (completions[r.id + '::' + sub.id + '::' + isoWeek]) {
+            doneSubtaskTitles.push(sub.title);
+          }
+        });
+      });
+      if (doneSubtaskTitles.length === 1) {
+        lines.push(`You got ${doneSubtaskTitles[0]} done — weekend reset started.`);
+      } else if (doneSubtaskTitles.length <= 5) {
+        lines.push(`Weekend reset done — ${andList(doneSubtaskTitles)} all checked off.`);
+      } else if (doneSubtaskTitles.length > 5) {
+        lines.push(`You knocked out ${doneSubtaskTitles.length} weekend reset items.`);
+      }
+    }
+
+    // ── 4. Daily anchor completions ────────────────────────────────────────
+    const dailyLibIds = new Set(
+      (data.tasks || []).filter((t) => t.isLibrary && t.isDefaultDaily).map((t) => t.id)
+    );
+    const anchorsDone = (data.tasks || []).filter((t) => {
       const d = t.completedAt?.slice(0, 10);
-      return d && d >= startKey && d <= endKey;
+      return d && d >= startKey && d <= endKey && t.librarySourceId && dailyLibIds.has(t.librarySourceId);
     });
-    if (tasksDone.length) {
-      lines.push(`You checked off ${tasksDone.length} task${tasksDone.length > 1 ? 's' : ''}.`);
+    if (anchorsDone.length) {
+      const uniqueTitles = [...new Set(anchorsDone.map((t) => t.title))];
+      if (uniqueTitles.length === 1) {
+        lines.push(`${uniqueTitles[0]} was your steady anchor this week.`);
+      } else if (uniqueTitles.length <= 4) {
+        lines.push(`${andList(uniqueTitles)} were your anchors this week.`);
+      } else {
+        lines.push(`Your daily anchors held — ${uniqueTitles.length} habits showed up this week.`);
+      }
     }
 
-    // Trip prep progress this week
+    // ── 5. Other weekly routines (atomic rhythms, non-weekend) ────────────
+    if (isoWeek) {
+      const completions = data.rhythmCompletions || {};
+      const routinesDone = (data.rhythms || []).filter((r) =>
+        r.active && !r.subtasks?.length &&
+        r.schedule?.type !== 'weekends' &&
+        completions[r.id + '::' + isoWeek] === true
+      );
+      if (routinesDone.length === 1) {
+        lines.push(`You kept up with ${routinesDone[0].title} this week.`);
+      } else if (routinesDone.length <= 3) {
+        lines.push(`You kept up with ${andList(routinesDone.map((r) => r.title))}.`);
+      } else {
+        lines.push(`You kept ${routinesDone.length} regular routines going this week.`);
+      }
+    }
+
+    // ── 6. Trip prep ───────────────────────────────────────────────────────
     (data.trips || []).forEach((trip) => {
       const c3 = Object.values(trip.checklist3Day  || {}).filter(Boolean).length;
       const cn = Object.values(trip.checklistNight || {}).filter(Boolean).length;
-      if (c3 + cn > 0) {
-        lines.push(`You made progress on trip prep for ${trip.name}.`);
+      const total = c3 + cn;
+      if (total > 0) {
+        lines.push(`${trip.name} prep is moving — ${total} item${total > 1 ? 's' : ''} checked off.`);
       }
     });
 
