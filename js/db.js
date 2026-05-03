@@ -75,6 +75,16 @@
         .maybeSingle();
       if (error) { console.warn('Pike: pull failed', error); return; }
       if (data && data.data) {
+        // Staleness guard: only replace if the remote state is strictly newer
+        // than the local state.  Both sides stamp _localTs (epoch ms) on every
+        // commit().  If localTs >= remoteTs the user has made changes since the
+        // last push and we must not overwrite them.
+        const localTs  = (global.Pike.state.data && global.Pike.state.data._localTs) || 0;
+        const remoteTs = data.data._localTs || 0;
+        if (remoteTs <= localTs) {
+          console.info('Pike: pullOnce skipped — local state is newer', { localTs, remoteTs });
+          return;
+        }
         global.Pike.state.replace(data.data);
       }
     } catch (e) {

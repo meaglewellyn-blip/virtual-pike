@@ -83,6 +83,11 @@
       if (typeof mutator === 'function') {
         mutator(state.data);
       }
+      // Stamp a millisecond timestamp on the data itself so db.js can compare
+      // it against the timestamp carried by an incoming Supabase pull and skip
+      // the replace() if local is newer.  Must be set BEFORE saveToLocal so
+      // the value round-trips correctly through localStorage.
+      state.data._localTs = Date.now();
       state.lastLocalCommitAt = Date.now();
       saveToLocal(state.data);
       emit();

@@ -288,15 +288,17 @@
   background: var(--surface);
 }
 
-/* Half-hour soft tick */
+/* Half-hour guide mark — dashed, lighter than the solid hour lines */
 .tl-hour-row::after {
   content: '';
   position: absolute;
   left: var(--gutter);
   right: 0;
   top: 50%;
-  border-top: 1px dashed var(--line-soft);
-  opacity: 0.5;
+  /* Use --line (darker than --line-soft) at 0.7 opacity so the mark is
+     legible for time-blocking without competing with the solid hour borders */
+  border-top: 1px dashed var(--line);
+  opacity: 0.7;
 }
 
 .tl-track {
