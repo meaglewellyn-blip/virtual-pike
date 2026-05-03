@@ -508,6 +508,61 @@
   .today-tray { order: -1; }   /* tray above timeline on small screens */
 }
 
+/* ── Today reminders card ───────────────────────────────────────────────────── */
+
+#today-reminders {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--accent-soft);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5) var(--space-6);
+  margin-bottom: var(--space-5);
+  box-shadow: var(--shadow-1);
+}
+
+.today-reminders-title {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-3);
+}
+
+.today-reminders-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.today-reminder-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.today-reminder-text {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-reminder-due {
+  font-size: var(--fs-xs);
+  color: var(--accent-strong);
+  flex-shrink: 0;
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.01em;
+}
+
 /* ── Today rhythm checklist ─────────────────────────────────────────────────── */
 
 .today-rhythm-list-wrap {

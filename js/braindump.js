@@ -225,8 +225,21 @@
       if (e.key === 'Enter') { e.preventDefault(); addCaptureClItem(); }
     });
 
+    // Due date
+    const dueDateWrapper = document.createElement('label');
+    dueDateWrapper.className = 'bd-expanded-due-row';
+    const dueDateLabel = document.createElement('span');
+    dueDateLabel.textContent = 'Due date (optional)';
+    const dueDateInput = document.createElement('input');
+    dueDateInput.type = 'date';
+    dueDateInput.className = 'input';
+    dueDateInput.setAttribute('aria-label', 'Due date');
+    dueDateWrapper.appendChild(dueDateLabel);
+    dueDateWrapper.appendChild(dueDateInput);
+
     expandedSection.appendChild(notesTextarea);
     expandedSection.appendChild(linkInput);
+    expandedSection.appendChild(dueDateWrapper);
     expandedSection.appendChild(clWrap);
 
     expandToggle.addEventListener('click', () => {
@@ -241,8 +254,9 @@
       const text = input.value.trim();
       if (!text) return;
 
-      const notes = notesTextarea.value.trim();
-      const link  = linkInput.value.trim();
+      const notes   = notesTextarea.value.trim();
+      const link    = linkInput.value.trim();
+      const dueDate = dueDateInput.value.trim() || null;
       const checklist = captureChecklist.length
         ? captureChecklist.map((ci) => ({ id: ci.id, text: ci.text, done: false }))
         : [];
@@ -258,6 +272,7 @@
           promotedTo: null,
           notes,
           link,
+          dueDate,
           checklist,
         });
       });
@@ -266,6 +281,7 @@
       input.value = '';
       notesTextarea.value = '';
       linkInput.value = '';
+      dueDateInput.value = '';
       captureChecklist.length = 0;
       renderCaptureClList();
       selectedCat = null;
@@ -306,6 +322,13 @@
     all.addEventListener('click', () => { activeFilter = 'all'; render(); });
     bar.appendChild(all);
 
+    const remindersBtn = document.createElement('button');
+    remindersBtn.type = 'button';
+    remindersBtn.className = 'bd-filter-pill bd-filter-reminders' + (activeFilter === 'reminders' ? ' is-active' : '');
+    remindersBtn.textContent = 'Reminders';
+    remindersBtn.addEventListener('click', () => { activeFilter = 'reminders'; render(); });
+    bar.appendChild(remindersBtn);
+
     CATEGORIES.forEach((cat) => {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -327,6 +350,7 @@
     const items = (getData().brainDump || []).filter((item) => {
       if (item.status === 'archived') return false;
       if (activeFilter === 'all') return true;
+      if (activeFilter === 'reminders') return !!item.dueDate;
       return item.category === activeFilter;
     });
 
@@ -423,6 +447,14 @@
     dateEl.className = 'bd-item-date';
     dateEl.textContent = fmtDate(item.createdAt);
     metaRow.appendChild(dateEl);
+
+    if (item.dueDate) {
+      const [y, m, d] = item.dueDate.split('-').map(Number);
+      const dueEl = document.createElement('span');
+      dueEl.className = 'bd-item-due';
+      dueEl.textContent = 'Due ' + new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      metaRow.appendChild(dueEl);
+    }
 
     if (item.promotedTo) {
       const promoBadge = document.createElement('span');
@@ -622,6 +654,10 @@
         <span>Link</span>
         <input type="url" class="input" name="link" placeholder="https://…" value="${esc(item.link || '')}">
       </label>
+      <label>
+        <span>Due date (optional)</span>
+        <input type="date" class="input" name="dueDate" value="${esc(item.dueDate || '')}">
+      </label>
       <div class="bd-edit-checklist-wrap">
         <span class="bd-edit-cl-label">Checklist</span>
         <div id="bd-edit-cl-list" class="bd-cl-list"></div>
@@ -691,6 +727,7 @@
       const category = String(fd.get('category') || 'uncategorized');
       const notes    = String(fd.get('notes') || '').trim();
       const link     = String(fd.get('link') || '').trim();
+      const dueDate  = String(fd.get('dueDate') || '').trim() || null;
 
       global.Pike.state.commit((d) => {
         const bdItem = (d.brainDump || []).find((x) => x.id === item.id);
@@ -699,6 +736,7 @@
           bdItem.category = category;
           bdItem.notes = notes;
           bdItem.link = link;
+          bdItem.dueDate = dueDate;
           bdItem.checklist = checklist.filter((ci) => ci.text.trim());
         }
       });

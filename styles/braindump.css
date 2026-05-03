@@ -329,6 +329,19 @@
 .bd-cat-other         { background: color-mix(in srgb, var(--text-muted) 12%, transparent); color: var(--text-muted); }
 .bd-cat-dont-forget   { background: color-mix(in srgb, #c97a68 15%, transparent); color: #8a4030; }
 
+/* ── Due date badge ─────────────────────────────────────────────────────────── */
+
+.bd-item-due {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: 99px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-strong);
+  letter-spacing: 0.02em;
+}
+
 /* ── Item extras: notes, link, checklist ─────────────────────────────────────── */
 
 .bd-item-notes {

@@ -117,24 +117,39 @@
   function runDailyDefaults() {
     const today = todayKey();
     const data = global.Pike.state.data;
-    const defaults = (data.tasks || []).filter((t) => t.isDefaultDaily && t.isLibrary);
-    if (!defaults.length) return;
+    const allDefaults = (data.tasks || []).filter((t) => t.isDefaultDaily && t.isLibrary);
+    if (!allDefaults.length) return;
 
-    // Only commit if something is actually missing
-    const needsCommit = defaults.some((lib) =>
-      !(data.tasks || []).some(
-        (t) => t.librarySourceId === lib.id && t.scheduledDate === today && !t.completedAt
-      )
-    );
+    // Deduplicate library records by title — keep only the first per unique title.
+    // Both migrateDailyRhythmsToDefaults() and migrateLegacyRecurrences() can create
+    // isDefaultDaily lib records for the same habit title, producing duplicate instances.
+    const seenTitles = new Set();
+    const defaults = allDefaults.filter((lib) => {
+      const key = lib.title.trim().toLowerCase();
+      if (seenTitles.has(key)) return false;
+      seenTitles.add(key);
+      return true;
+    });
+
+    // Helper: check whether an active instance already exists for today.
+    // Matches by librarySourceId (canonical) OR by the deterministic task ID
+    // (covers cases where librarySourceId was lost during migration or editing).
+    function hasInstance(lib, tasks) {
+      const deterministicId = `tsk_default_${lib.id}_${today}`;
+      return tasks.some(
+        (t) => !t.completedAt && t.scheduledDate === today &&
+               (t.librarySourceId === lib.id || t.id === deterministicId)
+      );
+    }
+
+    // Only commit if at least one default is missing an active instance
+    const needsCommit = defaults.some((lib) => !hasInstance(lib, data.tasks || []));
     if (!needsCommit) return;
 
     global.Pike.state.commit((d) => {
       d.tasks = d.tasks || [];
       defaults.forEach((lib) => {
-        const exists = d.tasks.some(
-          (t) => t.librarySourceId === lib.id && t.scheduledDate === today && !t.completedAt
-        );
-        if (!exists) {
+        if (!hasInstance(lib, d.tasks)) {
           d.tasks.push({
             id: `tsk_default_${lib.id}_${today}`,
             title: lib.title,
@@ -224,10 +239,23 @@
 
     // Also check for orphaned tray tasks whose recurrenceId no longer has a
     // matching entry in data.recurrences (parent was deleted by an earlier migration).
+    // Exception: tasks whose title matches an existing isDefaultDaily library record
+    // are daily default instances converted from the old recurrence engine — preserve them.
     const recIds = new Set(recs.map((r) => r.id));
+    const dailyDefaultTitles = new Set(
+      (data.tasks || [])
+        .filter((t) => t.isDefaultDaily && t.isLibrary)
+        .map((t) => (t.title || '').trim().toLowerCase())
+    );
     const orphanedTrayIds = new Set(
       (data.tasks || [])
-        .filter((t) => t.recurrenceId && !recIds.has(t.recurrenceId) && !t.completedAt)
+        .filter((t) => {
+          if (!t.recurrenceId || recIds.has(t.recurrenceId)) return false;
+          if (t.completedAt) return false;
+          // Don't prune tasks that correspond to an isDefaultDaily library entry by title
+          if (dailyDefaultTitles.has((t.title || '').trim().toLowerCase())) return false;
+          return true;
+        })
         .map((t) => t.id)
     );
 

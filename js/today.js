@@ -159,7 +159,67 @@
     renderTimeline();
     renderTray();
     renderTodayRhythms();
+    renderTodayReminders();
     if (global.Pike.travel) global.Pike.travel.renderTripPrepForToday();
+  }
+
+  function renderTodayReminders() {
+    const el = document.getElementById('today-reminders');
+    if (!el) return;
+
+    const data = getData();
+    const tk = todayKey();
+
+    // Cutoff: today + 7 days
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() + 7);
+    const cutoffKey = todayKey(cutoffDate);
+
+    // Collect active brain dump items with a dueDate on or before the cutoff
+    const reminders = (data.brainDump || []).filter(
+      (item) => item.dueDate && item.status !== 'archived' && item.dueDate <= cutoffKey
+    );
+
+    if (!reminders.length) {
+      el.hidden = true;
+      el.innerHTML = '';
+      return;
+    }
+
+    // Sort: overdue first, then by ascending dueDate
+    reminders.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+    function fmtReminderDue(isoDate) {
+      const [y, m, d] = isoDate.split('-').map(Number);
+      const due = new Date(y, m - 1, d);
+      due.setHours(0, 0, 0, 0);
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const diff = Math.round((due - now) / 86400000);
+      if (diff < 0) return `Overdue by ${Math.abs(diff)} day${Math.abs(diff) !== 1 ? 's' : ''}`;
+      if (diff === 0) return 'Due today';
+      if (diff === 1) return 'Due tomorrow';
+      return 'Due ' + due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+
+    function escR(s) {
+      if (s == null) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    el.innerHTML = `
+      <div class="today-reminders-inner">
+        <div class="today-reminders-title">Reminders</div>
+        <ul class="today-reminders-list">
+          ${reminders.map((item) => `
+            <li class="today-reminder-item">
+              <span class="today-reminder-text">${escR(item.text)}</span>
+              <span class="today-reminder-due">${escR(fmtReminderDue(item.dueDate))}</span>
+            </li>
+          `).join('')}
+        </ul>
+      </div>`;
+    el.hidden = false;
   }
 
   function renderTodayRhythms() {

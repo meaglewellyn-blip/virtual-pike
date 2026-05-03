@@ -133,6 +133,12 @@
   border-left: 2px dashed var(--line);
 }
 
+/* Completed task — strikethrough */
+.week-item.is-task.is-completed .week-item-title {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
 /* Rhythm — sage accent */
 .week-item.is-rhythm {
   padding-left: var(--space-2);
