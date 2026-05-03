@@ -1,6 +1,6 @@
 # Virtual Pike — Source of Truth
 
-**Version:** Based on live codebase as of 2026-05-03 (service worker `pike-v20`)  
+**Version:** Based on live codebase as of 2026-05-03 (service worker `pike-v21`)  
 **Purpose:** Canonical behavioral, architectural, and diagnostic reference for the live app. Use this document before touching any code or diagnosing any bug.
 
 ---
@@ -746,13 +746,23 @@ These are set in `js/state.js` `defaultState()`. A proper Settings UI is planned
 
 ## G. Known Regression Traps
 
-### Regression 1: Rhythm Schedule Button Invisible on Mobile
+### Regression 1: Rhythm Action Buttons Invisible on Mobile
 
-**Symptom:** Weekend Rhythm subtasks appear in Today's rhythm section but cannot be tapped to schedule. They look like passive checklist items only.  
-**Root cause:** `.today-rhythm-sched-btn` had `opacity: 0` default with `:hover` reveal only. Touch devices have no hover state.  
+This regression has appeared in two places. Both are fixed and both must stay fixed.
+
+**Symptom A (Today schedule button):** Weekend Rhythm subtasks appear in Today's rhythm section but cannot be tapped to schedule. They look like passive checklist items only.  
+**Root cause A:** `.today-rhythm-sched-btn` had `opacity: 0` default with `:hover` reveal only.  
 **Affected files:** `styles/today.css`  
-**Correct behavior:** `opacity: 0.5` default (always visible), `opacity: 1` on `:hover`. Fixed in `today.css v6`.  
-**Regression trigger:** Any edit to `.today-rhythm-sched-btn` CSS that sets `opacity: 0` as the base style.
+**Fix A:** `opacity: 0.5` default (always visible), `opacity: 1` on `:hover`. Fixed in `today.css v6`.  
+**Regression trigger A:** Any edit to `.today-rhythm-sched-btn` CSS that sets `opacity: 0` as the base style.
+
+**Symptom B (Week view done button):** Weekend Rhythm items appear in the Week grid but the ✓ done button is invisible. Touch users cannot mark rhythms complete from Week view.  
+**Root cause B:** `.week-rhythm-done-btn` had `opacity: 0` default with `:hover` reveal only.  
+**Affected files:** `styles/week.css`  
+**Fix B:** `opacity: 0.5` default (always visible), `opacity: 1` on `:hover`. Fixed in `week.css v4`.  
+**Regression trigger B:** Any edit to `.week-rhythm-done-btn` CSS that sets `opacity: 0` as the base style.
+
+**Rule for all rhythm action buttons:** Touch devices have no hover state. Any interactive button that relies solely on `:hover` to become visible is a touch regression. All rhythm action buttons must have `opacity: 0.5` (or higher) as their default.
 
 ### Regression 2: Cross-Device Sync Lost (`_localTs` approach)
 
@@ -867,7 +877,7 @@ Inspect the element in DevTools:
 
 These behaviors must never be broken by future refactors, regardless of what the change is "trying to achieve."
 
-1. **The `→` schedule button on Today's rhythm items must always be visible and tappable on mobile.** `opacity: 0` (or any other technique that hides it from touch) is forbidden. Current implementation: `opacity: 0.5` baseline.
+1. **All rhythm action buttons must always be visible and tappable on mobile.** `opacity: 0` (or any other technique that hides an interactive button from touch users) is forbidden. This applies to: the `→` schedule button (`.today-rhythm-sched-btn`) in Today's rhythm list, and the ✓ done button (`.week-rhythm-done-btn`) in the Week grid. Both use `opacity: 0.5` as the baseline, upgrading to `opacity: 1` on `:hover` for desktop polish only.
 
 2. **Auth unlock must use `sessionStorage`, never `localStorage`.** Pike must reprompt for the passphrase every fresh open. This is intentional, mirrors Triage, and must never be changed to persistent storage.
 
@@ -887,7 +897,7 @@ These behaviors must never be broken by future refactors, regardless of what the
 
 10. **`data.travelTemplates` must be initialized exactly once** (when null), using `DEFAULT_TEMPLATES` from `travel.js`. Never reinitialize if it already exists — this would wipe template customizations.
 
-11. **The service worker cache version must be bumped whenever CSS or JS files change.** Current version: `pike-v20`. CSS query-string versions (`?v=N`) in `index.html` bust the service worker's network-first cache fetch. Both must be updated together.
+11. **The service worker cache version must be bumped whenever CSS or JS files change.** Current version: `pike-v21`. CSS query-string versions (`?v=N`) in `index.html` bust the service worker's network-first cache fetch. Both must be updated together.
 
 12. **`state.commit()` must be the only path for mutating `state.data`.** Direct assignment to `state.data.someProperty` will not trigger `saveToLocal()`, will not emit the change event, and will not schedule a Supabase push.
 

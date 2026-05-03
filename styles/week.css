@@ -165,7 +165,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.5;  /* always visible — touch devices have no hover state */
   transition: opacity var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 
