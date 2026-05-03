@@ -33,12 +33,15 @@
 
   function isUnlockedLocally() {
     try {
-      return localStorage.getItem(SESSION_KEY) === '1';
+      // sessionStorage is used intentionally: it expires when the browser tab
+      // (or app) is closed, so Pike re-prompts for the passphrase on every
+      // fresh open — matching the Triage pattern.
+      return sessionStorage.getItem(SESSION_KEY) === '1';
     } catch (_) { return false; }
   }
 
   function markUnlocked() {
-    try { localStorage.setItem(SESSION_KEY, '1'); } catch (_) {}
+    try { sessionStorage.setItem(SESSION_KEY, '1'); } catch (_) {}
     document.body.classList.remove('pike-locked');
     document.dispatchEvent(new CustomEvent('pike:unlock'));
   }
@@ -59,7 +62,7 @@
   }
 
   function lock() {
-    try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
+    try { sessionStorage.removeItem(SESSION_KEY); } catch (_) {}
     markLocked();
     const input = document.getElementById('pike-gate-input');
     if (input) { input.value = ''; input.focus(); }
