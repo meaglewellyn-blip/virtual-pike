@@ -592,18 +592,18 @@
   opacity: 0.4;
 }
 
-/* → schedule button — hidden until hover */
+/* → schedule button — always visible (mobile needs it tappable) */
 .today-rhythm-sched-btn {
   flex-shrink: 0;
   background: none;
   border: none;
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: var(--fs-base);
   line-height: 1;
   cursor: pointer;
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
-  opacity: 0;
+  opacity: 0.5;
   transition: opacity var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 .today-rhythm-item:hover .today-rhythm-sched-btn {
