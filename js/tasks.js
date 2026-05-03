@@ -61,6 +61,54 @@
 
   function getData() { return global.Pike.state.data; }
 
+  // ─── Time helpers (for "Add to planner" scheduling flow) ─────────────────────
+
+  function parseHHMM(s) {
+    if (!s) return null;
+    const [h, m] = s.split(':').map(Number);
+    if (Number.isFinite(h) && Number.isFinite(m)) return h * 60 + m;
+    return null;
+  }
+
+  function fmtHHMM(totalMinutes) {
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return `${pad2(h)}:${pad2(m)}`;
+  }
+
+  // Mirrors today.js parseFlexTime — accepts 9a, 915p, 1030pm, 2:30 PM, 1430, etc.
+  function parseFlexTime(input) {
+    if (!input) return null;
+    const s = String(input).trim().toLowerCase().replace(/\s+/g, '').replace(/([ap])$/, '$1m');
+    if (!s) return null;
+    const colonMatch = s.match(/^(\d{1,2}):(\d{2})(am|pm)?$/);
+    if (colonMatch) {
+      let h = parseInt(colonMatch[1], 10), m = parseInt(colonMatch[2], 10);
+      const ap = colonMatch[3];
+      if (ap === 'pm' && h !== 12) h += 12; else if (ap === 'am' && h === 12) h = 0;
+      if (h >= 0 && h < 24 && m >= 0 && m < 60) return `${pad2(h)}:${pad2(m)}`;
+      return null;
+    }
+    const bareMatch = s.match(/^(\d{3,4})(am|pm)?$/);
+    if (bareMatch) {
+      const digits = bareMatch[1], ap = bareMatch[2];
+      let h = digits.length === 4 ? parseInt(digits.slice(0,2),10) : parseInt(digits[0],10);
+      let m = digits.length === 4 ? parseInt(digits.slice(2),10) : parseInt(digits.slice(1),10);
+      if (ap === 'pm' && h !== 12) h += 12; else if (ap === 'am' && h === 12) h = 0;
+      if (h >= 0 && h < 24 && m >= 0 && m < 60) return `${pad2(h)}:${pad2(m)}`;
+      return null;
+    }
+    const hourMatch = s.match(/^(\d{1,2})(am|pm)?$/);
+    if (hourMatch) {
+      let h = parseInt(hourMatch[1], 10);
+      const ap = hourMatch[2];
+      if (ap === 'pm' && h !== 12) h += 12; else if (ap === 'am' && h === 12) h = 0;
+      if (h >= 0 && h < 24) return `${pad2(h)}:00`;
+      return null;
+    }
+    return null;
+  }
+
   // ─── Render ───────────────────────────────────────────────────────────────────
 
   function render() {
@@ -316,7 +364,7 @@
       addBtn2.type = 'button';
       addBtn2.className = 'btn btn-ghost btn-xs tasks-add-today-btn';
       addBtn2.textContent = 'Add to today';
-      addBtn2.addEventListener('click', () => addToToday(t, addBtn2));
+      addBtn2.addEventListener('click', () => promptAddToToday(t, addBtn2));
 
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
@@ -335,9 +383,26 @@
     return wrap;
   }
 
-  // ─── Add library task to today's tray ────────────────────────────────────────
+  // ─── Add library task to today — two-step choice flow ────────────────────────
 
-  function addToToday(libraryTask, btnEl) {
+  // Returns true if this library task already has an unfinished instance today
+  function isAlreadyInToday(libraryTask) {
+    const tk = todayKey();
+    return (getData().tasks || []).some(
+      (t) => t.librarySourceId === libraryTask.id && t.scheduledDate === tk && !t.completedAt
+    );
+  }
+
+  function flashBtn(btnEl, text, ms = 2000) {
+    if (!btnEl) return;
+    const orig = btnEl.textContent;
+    btnEl.textContent = text;
+    btnEl.disabled = true;
+    setTimeout(() => { btnEl.textContent = orig; btnEl.disabled = false; }, ms);
+  }
+
+  // Commit a tray instance (no scheduledStart)
+  function addToTray(libraryTask) {
     const tk = todayKey();
     global.Pike.state.commit((d) => {
       d.tasks = d.tasks || [];
@@ -353,16 +418,106 @@
         category: libraryTask.category || 'self',
       });
     });
-    // Brief visual confirmation on the button
-    if (btnEl) {
-      const orig = btnEl.textContent;
-      btnEl.textContent = '✓ Added';
-      btnEl.disabled = true;
-      setTimeout(() => {
-        btnEl.textContent = orig;
-        btnEl.disabled = false;
-      }, 1500);
+  }
+
+  // Swap the open modal to the "pick a time" form for Add to planner
+  function showPlannerTimeForm(libraryTask, btnEl) {
+    const label = libraryTask.title +
+      (libraryTask.estimateMinutes ? ` · ${fmtDuration(libraryTask.estimateMinutes)}` : '');
+
+    const form = document.createElement('form');
+    form.innerHTML = `
+      <p class="task-add-label">${esc(label)}</p>
+      <label>
+        <span>Start time</span>
+        <input type="text" class="input" name="time" autocomplete="off"
+               placeholder="e.g. 9a, 2:30 PM, 1430" required>
+      </label>
+      <div class="pike-modal-actions">
+        <button type="button" class="btn" data-modal-close="1">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add to timeline</button>
+      </div>
+    `;
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const rawTime = String(new FormData(form).get('time') || '').trim();
+      const timeStr = parseFlexTime(rawTime);
+      if (!timeStr) {
+        let errEl = form.querySelector('.task-add-error');
+        if (!errEl) {
+          errEl = document.createElement('p');
+          errEl.className = 'task-add-error';
+          form.querySelector('.pike-modal-actions').before(errEl);
+        }
+        errEl.textContent = 'Enter a valid time — try 9a, 10:30, or 2 PM.';
+        return;
+      }
+      const tk = todayKey();
+      global.Pike.state.commit((d) => {
+        d.tasks = d.tasks || [];
+        d.tasks.push({
+          id: uid('tsk'),
+          title: libraryTask.title,
+          estimateMinutes: libraryTask.estimateMinutes || 30,
+          scheduledDate: tk,
+          scheduledStart: timeStr,
+          completedAt: null,
+          isLibrary: false,
+          librarySourceId: libraryTask.id,
+          category: libraryTask.category || 'self',
+        });
+      });
+      global.Pike.modal.close();
+      flashBtn(btnEl, '✓ Added');
+    });
+
+    // Replace modal body and title in place
+    const modalBody  = document.getElementById('pike-modal-body');
+    const modalTitle = document.getElementById('pike-modal-title');
+    if (modalBody)  modalBody.replaceChildren(form);
+    if (modalTitle) modalTitle.textContent = 'Schedule on timeline';
+    form.querySelector('input[name="time"]')?.focus();
+  }
+
+  function promptAddToToday(libraryTask, btnEl) {
+    // 1. Duplicate guard — show "Already in Today" and bail
+    if (isAlreadyInToday(libraryTask)) {
+      flashBtn(btnEl, 'Already in Today', 2500);
+      return;
     }
+
+    // 2. Choice modal
+    const label = libraryTask.title +
+      (libraryTask.estimateMinutes ? ` · ${fmtDuration(libraryTask.estimateMinutes)}` : '');
+
+    const container = document.createElement('div');
+    container.className = 'task-add-choice';
+    container.innerHTML = `
+      <p class="task-add-label">${esc(label)}</p>
+      <div class="task-add-btns">
+        <button type="button" class="btn btn-primary task-add-choice-btn" data-choice="planner">
+          Add to planner
+          <span class="task-add-choice-hint">Schedule a time on today's timeline</span>
+        </button>
+        <button type="button" class="btn task-add-choice-btn" data-choice="dock">
+          Add to Today dock
+          <span class="task-add-choice-hint">Drop into the Flexible tray, unscheduled</span>
+        </button>
+      </div>
+    `;
+
+    container.querySelector('[data-choice="dock"]').addEventListener('click', () => {
+      addToTray(libraryTask);
+      global.Pike.modal.close();
+      flashBtn(btnEl, '✓ Added');
+    });
+
+    container.querySelector('[data-choice="planner"]').addEventListener('click', () => {
+      showPlannerTimeForm(libraryTask, btnEl);
+    });
+
+    global.Pike.modal.open({ title: 'Add to today', body: container });
   }
 
   // ─── Other task modal (add / edit) ────────────────────────────────────────────

@@ -144,3 +144,53 @@
   font-style: italic;
   line-height: var(--lh-loose);
 }
+
+/* ── "Add to today" choice modal ─────────────────────────────────────────────── */
+
+.task-add-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.task-add-label {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.task-add-btns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Wider choice buttons with sub-hint text */
+.task-add-choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-3) var(--space-4);
+  height: auto;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.task-add-choice-hint {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-normal);
+  opacity: 0.75;
+  line-height: 1.3;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Inline error for time entry */
+.task-add-error {
+  font-size: var(--fs-xs);
+  color: var(--color-danger, #c0392b);
+  margin: var(--space-1) 0 0;
+}
