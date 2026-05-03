@@ -90,7 +90,7 @@
    */
   function parseFlexTime(input) {
     if (!input) return null;
-    const s = String(input).trim().toLowerCase().replace(/\s+/g, '');
+    const s = String(input).trim().toLowerCase().replace(/\s+/g, '').replace(/([ap])$/, '$1m');
     if (!s) return null;
 
     // "2:30pm", "14:30", "2:30"
@@ -445,6 +445,16 @@
         if (b.kind === 'event') openEventModal(b.raw);
         else openTaskModal(b.raw);
       });
+      // Draggable for rescheduling — preserve duration, move start
+      el.draggable = true;
+      el.addEventListener('dragstart', (e) => {
+        el.classList.add('is-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', JSON.stringify({
+          reschedule: { kind: b.kind, id: b.id, durationMinutes: b.endMin - b.startMin }
+        }));
+      });
+      el.addEventListener('dragend', () => el.classList.remove('is-dragging'));
     }
 
     return el;
@@ -555,6 +565,8 @@
         scheduleTaskAt(payload.taskId, min);
       } else if (payload.rhythmRef) {
         scheduleRhythmRefAt(payload.rhythmRef, min);
+      } else if (payload.reschedule) {
+        rescheduleBlock(payload.reschedule, min);
       }
     });
   }
@@ -594,6 +606,27 @@
           subtaskId: ref.subtaskId || null,
           category: 'self',
         });
+      }
+    });
+  }
+
+  // Move an already-scheduled block to a new start time (preserves duration)
+  function rescheduleBlock(info, startMinutes) {
+    global.Pike.state.commit((d) => {
+      if (info.kind === 'task') {
+        const t = (d.tasks || []).find((x) => x.id === info.id);
+        if (t) t.scheduledStart = fmtHHMM(startMinutes);
+      } else if (info.kind === 'event') {
+        const ev = (d.events || []).find((x) => x.id === info.id);
+        if (ev) {
+          const oldStart = parseHHMM(ev.start);
+          const oldEnd   = parseHHMM(ev.end);
+          const duration = (oldStart != null && oldEnd != null)
+            ? (oldEnd - oldStart)
+            : info.durationMinutes;
+          ev.start = fmtHHMM(startMinutes);
+          ev.end   = fmtHHMM(startMinutes + duration);
+        }
       }
     });
   }
@@ -760,6 +793,7 @@
       ${libraryHTML}
       <div class="pike-modal-actions">
         ${isEdit ? '<button type="button" class="btn btn-danger" data-action="delete">Delete</button>' : ''}
+        ${isEdit && isScheduled ? '<button type="button" class="btn btn-ghost" data-action="move-to-tray">Move to tray</button>' : ''}
         <button type="button" class="btn" data-modal-close="1">Cancel</button>
         <button type="submit" class="btn btn-primary">${isEdit ? 'Save' : 'Add task'}</button>
       </div>
@@ -773,6 +807,15 @@
           global.Pike.modal.close();
         }
       });
+    });
+
+    // Wire "Move to tray" — clears scheduledStart, keeps scheduledDate so it stays in today's tray
+    form.querySelector('[data-action="move-to-tray"]')?.addEventListener('click', () => {
+      global.Pike.state.commit((d) => {
+        const t = (d.tasks || []).find((x) => x.id === initial.id);
+        if (t) t.scheduledStart = null;
+      });
+      global.Pike.modal.close();
     });
 
     form.addEventListener('submit', (e) => {

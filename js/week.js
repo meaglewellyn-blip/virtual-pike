@@ -119,7 +119,7 @@
         .filter((e) => e.date === key)
         .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
       const tasks   = (data.tasks || [])
-        .filter((t) => t.scheduledDate === key && !t.completedAt)
+        .filter((t) => t.scheduledDate === key && t.scheduledStart && !t.completedAt)
         .sort((a, b) => (a.scheduledStart || '').localeCompare(b.scheduledStart || ''));
       const rhythms = rhythmsForDay(date, data.rhythms);
       const gcalTimed  = (data.calendarEvents || [])
