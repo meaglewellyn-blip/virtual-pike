@@ -217,47 +217,81 @@
     const recs = data.recurrences || [];
     const dailyRecs   = recs.filter((r) => r.rule?.type === 'daily');
     const weekendRecs = recs.filter((r) => r.rule?.type === 'everyWeekend');
-    if (!dailyRecs.length && !weekendRecs.length) return;   // nothing to do
+    // Null-rule ("manual") recurrences are the old Other/library task storage
+    const manualRecs  = recs.filter((r) => !r.rule);
+
+    const hasWork = dailyRecs.length || weekendRecs.length || manualRecs.length;
+
+    // Also check for orphaned tray tasks whose recurrenceId no longer has a
+    // matching entry in data.recurrences (parent was deleted by an earlier migration).
+    const recIds = new Set(recs.map((r) => r.id));
+    const orphanedTrayIds = new Set(
+      (data.tasks || [])
+        .filter((t) => t.recurrenceId && !recIds.has(t.recurrenceId) && !t.completedAt)
+        .map((t) => t.id)
+    );
+
+    if (!hasWork && orphanedTrayIds.size === 0) return;   // nothing to do
 
     const weekendIds = new Set(weekendRecs.map((r) => r.id));
     const dailyIds   = new Set(dailyRecs.map((r) => r.id));
+    const manualIds  = new Set(manualRecs.map((r) => r.id));
 
     global.Pike.state.commit((d) => {
       d.tasks       = d.tasks || [];
       d.recurrences = d.recurrences || [];
 
-      // 1. Promote daily recurrences to isDefaultDaily library tasks
+      // 1. Promote daily recurrences → isDefaultDaily library tasks
       dailyRecs.forEach((r) => {
         const already = d.tasks.some(
-          (t) => t.isDefaultDaily && t.isLibrary && t.title.trim().toLowerCase() === r.title.trim().toLowerCase()
+          (t) => t.isDefaultDaily && t.isLibrary &&
+                 t.title.trim().toLowerCase() === r.title.trim().toLowerCase()
         );
         if (!already) {
           d.tasks.push({
             id:              'lib-daily-rec-' + r.id,
             title:           r.title,
             estimateMinutes: r.estimateMinutes || 30,
-            scheduledDate:   null,
-            scheduledStart:  null,
-            completedAt:     null,
-            isLibrary:       true,
-            isDefaultDaily:  true,
-            category:        r.category || 'self',
+            scheduledDate:   null, scheduledStart: null, completedAt: null,
+            isLibrary: true, isDefaultDaily: true,
+            category: r.category || 'self',
           });
         }
       });
 
-      // 2. Remove daily and everyWeekend recurrences from the recurrences array
+      // 2. Promote manual (null-rule) recurrences → isLibrary task library entries
+      //    These are the "Other" tasks that lived in the old recurrence store.
+      manualRecs.forEach((r) => {
+        const already = d.tasks.some(
+          (t) => t.isLibrary && !t.isDefaultDaily &&
+                 t.title.trim().toLowerCase() === r.title.trim().toLowerCase()
+        );
+        if (!already) {
+          d.tasks.push({
+            id:              'lib-other-rec-' + r.id,
+            title:           r.title,
+            estimateMinutes: r.estimateMinutes || 30,
+            scheduledDate:   null, scheduledStart: null, completedAt: null,
+            isLibrary: true, isDefaultDaily: false,
+            category: r.category || 'home',
+          });
+        }
+      });
+
+      // 3. Remove migrated recurrences from the array
       d.recurrences = d.recurrences.filter(
-        (r) => !dailyIds.has(r.id) && !weekendIds.has(r.id)
+        (r) => !dailyIds.has(r.id) && !weekendIds.has(r.id) && !manualIds.has(r.id)
       );
 
-      // 3. Prune pending tray tasks that were generated from old everyWeekend
-      //    recurrences. These have no bucket identity and should not auto-appear.
-      //    Completed ones are preserved (historical record).
+      // 4. Prune pending tray tasks generated from old everyWeekend recurrences
       d.tasks = d.tasks.filter((t) => {
         if (!t.recurrenceId || !weekendIds.has(t.recurrenceId)) return true;
-        return !!t.completedAt; // keep completed, drop pending
+        return !!t.completedAt;
       });
+
+      // 5. Prune orphaned tray tasks — unfinished tasks whose parent recurrence
+      //    was already removed by a prior migration run. Completed ones are kept.
+      d.tasks = d.tasks.filter((t) => !orphanedTrayIds.has(t.id));
     });
   }
 

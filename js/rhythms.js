@@ -250,20 +250,61 @@
 
   // ── State init ───────────────────────────────────────────────────────────────
 
+  // Canonical Weekend Rhythm subtasks from Tasks.xlsx source of truth.
+  // Only used for the one-time seed below — not referenced at runtime.
+  const WEEKEND_RHYTHM_SUBTASKS = [
+    { title: 'Shower',           estimateMinutes: 15 },
+    { title: 'Wash Hair',        estimateMinutes: 15 },
+    { title: 'Dry Hair',         estimateMinutes: 20 },
+    { title: 'Vacuum',           estimateMinutes: 30 },
+    { title: 'Tidy Up',          estimateMinutes: 20 },
+    { title: 'Brush Ro',         estimateMinutes: 10 },
+    { title: 'Order Groceries',  estimateMinutes: 30 },
+    { title: 'Wash Clothes',     estimateMinutes: 10 },
+    { title: 'Fold Clothes',     estimateMinutes: 20 },
+    { title: 'Clean Kitchen',    estimateMinutes: 15 },
+    { title: 'Clean Bathroom',   estimateMinutes: 15 },
+    { title: 'Review Finances',  estimateMinutes: 30 },
+  ];
+
   function init() {
     const data = global.Pike.state.data;
-    const needsWorkout = !data.workoutSequence || !data.workoutSequence.order || data.workoutSequence.order.length === 0;
-    const needsRhythms = !data.rhythms;
+    const needsWorkout     = !data.workoutSequence || !data.workoutSequence.order || data.workoutSequence.order.length === 0;
+    const needsRhythms     = !data.rhythms;
     const needsCompletions = !data.rhythmCompletions;
-    if (needsWorkout || needsRhythms || needsCompletions) {
+
+    // Seed the Weekend Rhythm if no weekends-type rhythm exists yet.
+    const needsWeekendRhythm = !(data.rhythms || []).some(
+      (r) => r.schedule?.type === 'weekends'
+    );
+
+    if (needsWorkout || needsRhythms || needsCompletions || needsWeekendRhythm) {
       global.Pike.state.commit((d) => {
         if (!d.workoutSequence || !d.workoutSequence.order || d.workoutSequence.order.length === 0) {
-          const prevIndex = d.workoutSequence?.nextIndex || 0;
-          const prevHistory = d.workoutSequence?.history || [];
+          const prevIndex   = d.workoutSequence?.nextIndex || 0;
+          const prevHistory = d.workoutSequence?.history   || [];
           d.workoutSequence = { order: WORKOUT_ORDER, nextIndex: prevIndex, history: prevHistory };
         }
-        if (!d.rhythms) d.rhythms = [];
+        if (!d.rhythms)           d.rhythms = [];
         if (!d.rhythmCompletions) d.rhythmCompletions = {};
+
+        // One-time seed: create the Weekend Rhythm with all 12 subtasks.
+        // Guard: only runs if no weekends-type rhythm already exists.
+        const alreadyHasWeekend = d.rhythms.some((r) => r.schedule?.type === 'weekends');
+        if (!alreadyHasWeekend) {
+          d.rhythms.push({
+            id:       uid('rhy'),
+            title:    'Weekend Routine',
+            schedule: { type: 'weekends' },
+            active:   true,
+            subtasks: WEEKEND_RHYTHM_SUBTASKS.map((s) => ({
+              id:              uid('sub'),
+              title:           s.title,
+              estimateMinutes: s.estimateMinutes,
+            })),
+            weekendAllocations: {},
+          });
+        }
       });
     }
   }
