@@ -8,7 +8,7 @@
 
   const LAT = 34.0232;
   const LON = -84.3616;
-  const CACHE_KEY = 'pike_weather_v1';
+  const CACHE_KEY = 'pike_weather_v2';
   const CACHE_TTL_MS = 30 * 60 * 1000;
 
   const WMO = {
@@ -70,7 +70,7 @@
       `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
       `&hourly=temperature_2m,precipitation_probability,weathercode` +
       `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch` +
-      `&timezone=America%2FNew_York&forecast_days=1`;
+      `&timezone=America%2FNew_York&forecast_days=2`;
 
     try {
       const res = await window.fetch(url);
@@ -110,17 +110,24 @@
     const condition = wmo(data.current.code);
     const nowHour = new Date().getHours();
 
-    // Show current hour through next 8 hours (up to 23:00)
+    // Show the next 10 hours starting from the current hour.
+    // Uses timestamp comparison so the window crosses midnight naturally —
+    // not capped to any day boundary or planner window.
+    const HOURS_AHEAD = 10;
+    const windowStart = new Date();
+    windowStart.setMinutes(0, 0, 0);  // snap to top of current hour
+    const windowEndMs = windowStart.getTime() + HOURS_AHEAD * 60 * 60 * 1000;
+
     const upcoming = data.hourly
       .filter((h) => {
-        const hr = new Date(h.time).getHours();
-        return hr >= nowHour && hr <= Math.min(nowHour + 8, 23);
+        const t = new Date(h.time).getTime();
+        return t >= windowStart.getTime() && t <= windowEndMs;
       })
-      .slice(0, 9);
+      .slice(0, HOURS_AHEAD + 1);
 
     const hourCells = upcoming.map((h) => {
-      const hr = new Date(h.time).getHours();
-      const isNow = hr === nowHour;
+      const hTime = new Date(h.time);
+      const isNow = hTime.getTime() === windowStart.getTime();
       const precipHTML = h.precip >= 20
         ? `<span class="wx-precip">${h.precip}%</span>`
         : '';
