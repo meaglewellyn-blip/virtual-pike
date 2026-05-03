@@ -365,7 +365,7 @@ The primary cockpit. What Meagan opens every morning. Shows the day holistically
 - `data.trips` — read-only for trip prep card
 - `data.people` — read-only for upcoming birthdays/anniversaries (via People module)
 - `data.quotes` — read-only for daily quote card (via Quotes module)
-- `data.brainDump` — read-only for Reminders card
+- `data.reminders` — read-only for Reminders card (items due within 7 days, active only)
 
 ### Intended Behavior
 
@@ -421,7 +421,7 @@ Seven-day view for context and planning. Shows what's on the calendar, what rhyt
 ### Owned Data
 
 - `data.events`, `data.calendarEvents` — filtered per day
-- `data.tasks` — only scheduled (`scheduledStart` set) and incomplete tasks
+- `data.tasks` — scheduled tasks (`scheduledStart` set, `!isLibrary`); completed tasks are included and displayed with strikethrough
 - `data.rhythms` + `data.rhythmCompletions` — per-day rendering
 - `data.trips` — departure date markers
 - Module state: `weekOffset` (integer, Mon–Sun week offset from current)
