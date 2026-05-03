@@ -1,6 +1,6 @@
 # Virtual Pike — Source of Truth
 
-**Version:** Based on live codebase as of 2026-05-03 (service worker `pike-v19`)  
+**Version:** Based on live codebase as of 2026-05-03 (service worker `pike-v20`)  
 **Purpose:** Canonical behavioral, architectural, and diagnostic reference for the live app. Use this document before touching any code or diagnosing any bug.
 
 ---
@@ -186,7 +186,7 @@ The week grid (`js/week.js`) renders Mon–Sun for the current (or offset) week.
 1. **Google Calendar all-day events** — from `data.calendarEvents` where `isAllDay: true`. Shows source badge (Personal/Work).
 2. **Manual events** — from `data.events` where `date === dayKey`. Clickable → `openEventModal()`.
 3. **Google Calendar timed events** — from `data.calendarEvents` where `!isAllDay && start` is set.
-4. **Scheduled tasks** — from `data.tasks` where `scheduledDate === dayKey AND scheduledStart AND !completedAt`. Shows scheduled time.
+4. **Scheduled tasks** — from `data.tasks` where `scheduledDate === dayKey AND scheduledStart AND !isLibrary`. Shows scheduled time. **Completed tasks are included** — displayed with strikethrough (`.is-completed` class) so the day's history is visible.
 5. **Rhythms** — see detailed logic below.
 6. **Trip departure markers** — `✈ [trip name]` for any trip where `departureDate === dayKey`.
 7. **Empty state:** "Open" (plain text) when nothing else renders.
@@ -201,7 +201,6 @@ For each active rhythm matching the day's schedule:
 
 ### What Should NOT Appear in Week View
 
-- Completed tasks (`completedAt` is set).
 - Library/template records (`isLibrary: true`).
 - Done rhythms (filtered out by `isRhythmDoneThisPeriod()`).
 - Tray tasks without `scheduledStart`.
@@ -226,15 +225,15 @@ Generates an array of plain-English sentence strings. Each string is a complete 
    - **Always use "sponsee" / "sponsees" for `category === 'sponsee'` people.** Never substitute "friend" or "person."
    - 0: nothing.
 
-3. **Weekend rhythm completions** — from `rhythmCompletions` and `weekendAllocations` for each `weekends`-type rhythm with subtasks.
-   - States per subtask: `done` (key in rhythmCompletions = true), `skipped` (allocation[subId] === null), `allocated-not-done` (allocation[subId] is sat/sun but no completion key), `untouched` (no allocation, no completion).
-   - Only emit a line if at least one subtask was intentionally touched (done OR skipped OR allocated).
-   - Exact wording rules: see code in `week.js` `generateWeeklyReview()` lines 314–333. Do not paraphrase.
+3. **Weekend rhythm completions** — from `rhythmCompletions` for each `weekends`-type rhythm with subtasks. **Only emit a line when `doneCount > 0` (at least one subtask was actually checked off).** Planning/allocation alone does not trigger a line.
+   - All subtasks done: `"Weekend reset fully checked off."`
+   - 1–4 done (partial): `"Weekend reset in progress — [and-list of titles] checked off."`
+   - 5+ done (partial): `"Weekend reset in progress — [N] of [total] items checked off."`
+   - 0 done: nothing (skip entirely — no partial planning credit).
 
-4. **Daily anchor completions** — `isDefaultDaily` tasks completed this week. Groups unique titles.
-   - 1 unique: `"[Title] was your steady anchor this week."`
-   - 2–4 unique: `"[list] were your anchors this week."`
-   - 5+: `"Your daily anchors held — [N] habits showed up this week."`
+4. **Daily anchor completions** — `isDefaultDaily` tasks completed this week. **One line per unique daily default with a concrete count.** Format: `"[Title] — [timesWord(count)] this week."` (e.g., "Meditate — three times this week.")
+   - Uses `timesWord(n)` helper: `['once','twice','three times','four times','five times','six times','seven times']` (or `"N times"` for 8+).
+   - One line emitted per unique title that has at least one completion this week.
    - 0: nothing.
 
 5. **Other weekly routines** — atomic (non-subtask) rhythms with a non-weekend schedule that have `rhythmCompletions[r.id + '::' + isoWeek] === true`.
@@ -365,6 +364,7 @@ The primary cockpit. What Meagan opens every morning. Shows the day holistically
 - `data.trips` — read-only for trip prep card
 - `data.people` — read-only for upcoming birthdays/anniversaries (via People module)
 - `data.quotes` — read-only for daily quote card (via Quotes module)
+- `data.brainDump` — read-only for Reminders card
 
 ### Intended Behavior
 
@@ -380,6 +380,8 @@ The primary cockpit. What Meagan opens every morning. Shows the day holistically
 **Quote card:** One quote per session (picked randomly on first open, index stored in `sessionStorage`). The same quote shows all day. Adding/deleting a quote clears the session index so the next open re-picks.
 
 **People events:** Birthday/sobriety anniversaries within 14 days. Rendered by `Pike.people.renderUpcomingEvents()`.
+
+**Reminders card** (`#today-reminders`): Shown when any Brain Dump item has a `dueDate` on or before today + 7 days (including overdue items) and `status !== 'archived'`. Items are sorted by `dueDate` ascending. Each item shows text + a contextual due label ("Due today", "Due tomorrow", "Overdue by N day(s)", "Due [Month Day]"). The container is hidden when no qualifying items exist. Rendered by `today.js` → `renderTodayReminders()`, called from `render()`. This is read-only — clicking goes nowhere; editing is done from Brain Dump.
 
 **Trip prep card:** Shown when the most imminent upcoming trip departs 1–3 days away (3-day checklist) or 0–1 day away (night-before checklist). Checks sync directly to `trip.checklist3Day` / `trip.checklistNight` in state.
 
@@ -656,6 +658,7 @@ A calm parking lot for ideas. No pressure to process. Capture anything: shows, m
   promotedTo: null | { type: 'task', targetId: '...', label: 'Task Library' },
   notes: '',
   link: '',
+  dueDate: 'YYYY-MM-DD' | null,   // optional; surfaces item in Today's Reminders card
   checklist: [{ id, text, done }]
 }
 ```
@@ -663,6 +666,10 @@ A calm parking lot for ideas. No pressure to process. Capture anything: shows, m
 ### Categories
 
 `uncategorized`, `shows`, `movies`, `books`, `podcasts`, `writing`, `claude-projects`, `places`, `other`, `dont-forget`.
+
+### Reminders Filter
+
+A "Reminders" filter pill appears in the filter bar (after "All", before the category pills). When active, it shows all non-archived items where `item.dueDate` is set, regardless of category. This is a virtual filter — it does not correspond to any category value.
 
 ### Keyboard Shortcut
 
@@ -880,7 +887,7 @@ These behaviors must never be broken by future refactors, regardless of what the
 
 10. **`data.travelTemplates` must be initialized exactly once** (when null), using `DEFAULT_TEMPLATES` from `travel.js`. Never reinitialize if it already exists — this would wipe template customizations.
 
-11. **The service worker cache version must be bumped whenever CSS or JS files change.** Current version: `pike-v19`. CSS query-string versions (`?v=N`) in `index.html` bust the service worker's network-first cache fetch. Both must be updated together.
+11. **The service worker cache version must be bumped whenever CSS or JS files change.** Current version: `pike-v20`. CSS query-string versions (`?v=N`) in `index.html` bust the service worker's network-first cache fetch. Both must be updated together.
 
 12. **`state.commit()` must be the only path for mutating `state.data`.** Direct assignment to `state.data.someProperty` will not trigger `saveToLocal()`, will not emit the change event, and will not schedule a Supabase push.
 
