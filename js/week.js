@@ -282,26 +282,56 @@
     }
 
     // ── 3. Weekend rhythm subtask completions ─────────────────────────────
+    // For each subtask this ISO week, one of four states:
+    //   completed  → rhythmCompletions key is true
+    //   skipped    → weekendAllocations[isoWeek][subId] === null (deliberate deferral)
+    //   allocated  → weekendAllocations[isoWeek][subId] is 'saturday'/'sunday' but not done
+    //   untouched  → no allocation entry and not done
     if (isoWeek) {
       const completions = data.rhythmCompletions || {};
       const weekendRhythms = (data.rhythms || []).filter(
         (r) => r.active && r.schedule?.type === 'weekends' && r.subtasks?.length
       );
-      const doneSubtaskTitles = [];
       weekendRhythms.forEach((r) => {
-        (r.subtasks || []).forEach((sub) => {
-          if (completions[r.id + '::' + sub.id + '::' + isoWeek]) {
-            doneSubtaskTitles.push(sub.title);
-          }
+        const alloc       = r.weekendAllocations?.[isoWeek] || null;
+        const total       = r.subtasks.length;
+        let completedTitles = [], skippedCount = 0, allocatedCount = 0;
+
+        r.subtasks.forEach((sub) => {
+          const done      = completions[r.id + '::' + sub.id + '::' + isoWeek] === true;
+          const allocVal  = alloc ? alloc[sub.id] : undefined;
+          const skipped   = alloc && allocVal === null;
+          const allocated = alloc && (allocVal === 'saturday' || allocVal === 'sunday');
+
+          if (done)           completedTitles.push(sub.title);
+          else if (skipped)   skippedCount++;
+          else if (allocated) allocatedCount++;
         });
+
+        const doneCount = completedTitles.length;
+        // Only emit a line if something was intentionally touched this weekend
+        if (doneCount === 0 && skippedCount === 0 && allocatedCount === 0) return;
+
+        let line;
+        if (doneCount === total) {
+          line = 'Weekend reset fully checked off.';
+        } else if (doneCount > 0 && skippedCount > doneCount) {
+          line = 'Weekend reset was triaged for later.';
+        } else if (doneCount > 0 && skippedCount > 0) {
+          line = 'Weekend reset: some checked off, some skipped for now.';
+        } else if (doneCount > 0) {
+          // Some done, nothing explicitly skipped
+          line = doneCount <= 4
+            ? `Weekend reset in progress — ${andList(completedTitles)} checked off.`
+            : `Weekend reset in progress — ${doneCount} items checked off.`;
+        } else if (skippedCount > 0) {
+          line = 'Weekend reset was triaged for later.';
+        } else {
+          // allocatedCount > 0, nothing done or skipped yet
+          line = 'Weekend reset was planned out for the weekend.';
+        }
+        if (line) lines.push(line);
       });
-      if (doneSubtaskTitles.length === 1) {
-        lines.push(`You got ${doneSubtaskTitles[0]} done — weekend reset started.`);
-      } else if (doneSubtaskTitles.length <= 5) {
-        lines.push(`Weekend reset done — ${andList(doneSubtaskTitles)} all checked off.`);
-      } else if (doneSubtaskTitles.length > 5) {
-        lines.push(`You knocked out ${doneSubtaskTitles.length} weekend reset items.`);
-      }
     }
 
     // ── 4. Daily anchor completions ────────────────────────────────────────
@@ -333,9 +363,9 @@
       );
       if (routinesDone.length === 1) {
         lines.push(`You kept up with ${routinesDone[0].title} this week.`);
-      } else if (routinesDone.length <= 3) {
+      } else if (routinesDone.length > 1 && routinesDone.length <= 3) {
         lines.push(`You kept up with ${andList(routinesDone.map((r) => r.title))}.`);
-      } else {
+      } else if (routinesDone.length > 3) {
         lines.push(`You kept ${routinesDone.length} regular routines going this week.`);
       }
     }
