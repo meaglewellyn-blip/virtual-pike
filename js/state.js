@@ -37,6 +37,7 @@
       templates: [],
       people: [],
       brainDump: [],
+      reminders: [],
       quotes: [],
     };
   }

@@ -1,5 +1,5 @@
 /* Virtual Pike — minimal service worker (offline app shell) */
-const CACHE_VERSION = 'pike-v21';
+const CACHE_VERSION = 'pike-v22';
 const APP_SHELL = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const APP_SHELL = [
   './styles/components.css',
   './styles/sidebar.css',
   './styles/today.css',
+  './styles/reminders.css',
   './styles/auth.css',
   './js/auth.js',
   './js/state.js',
@@ -17,6 +18,7 @@ const APP_SHELL = [
   './js/modal.js',
   './js/recurrence.js',
   './js/today.js',
+  './js/reminders.js',
   './js/app.js',
 ];
 

@@ -1,6 +1,6 @@
 # Virtual Pike — Source of Truth
 
-**Version:** Based on live codebase as of 2026-05-03 (service worker `pike-v21`)  
+**Version:** Based on live codebase as of 2026-05-03 (service worker `pike-v22`)  
 **Purpose:** Canonical behavioral, architectural, and diagnostic reference for the live app. Use this document before touching any code or diagnosing any bug.
 
 ---
@@ -38,16 +38,17 @@ Design philosophy: **minimal, warm, editorial, Four Seasons–calm**. Never crow
 
 ### Navigation
 
-Nine sections, hash-based routing (`#today`, `#week`, etc.):
+Ten sections, hash-based routing (`#today`, `#week`, etc.):
 1. **Today** — the cockpit. Default landing screen.
 2. **Week** — Mon–Sun calendar grid + weekly review.
 3. **Rhythms** — workout sequence + recurring routines.
 4. **Travel** — trip planner, packing, supplements, pre-trip checklists.
 5. **People** — sponsees (step work, 7-day cadence) + family + friends.
-6. **Brain Dump** — free-capture parking lot for ideas.
-7. **Tasks** — three-bucket library view (Weekend Rhythm / Daily Defaults / Other).
-8. **Quotes** — quote library + daily quote surfaced in Today.
-9. **Settings** — Google Calendar connections + hardcoded defaults.
+6. **Reminders** — time-bound items with due dates; surfaces in Today within 7 days.
+7. **Brain Dump** — free-capture parking lot for open-ended ideas.
+8. **Tasks** — three-bucket library view (Weekend Rhythm / Daily Defaults / Other).
+9. **Quotes** — quote library + daily quote surfaced in Today.
+10. **Settings** — Google Calendar connections + hardcoded defaults.
 
 ### Architecture
 
@@ -62,7 +63,7 @@ Nine sections, hash-based routing (`#today`, `#week`, etc.):
 | Weather | Open-Meteo API (free, no key) |
 | Calendar | Google Calendar via Supabase Edge Function OAuth proxy |
 
-All JS modules follow the IIFE pattern: `(function(global){...})(window)`. They attach to `window.Pike.*`. Loading order defined in `index.html` matters: `auth → state → router → db → modal → recurrence → today → week → rhythms → travel → people → tasks → braindump → quotes → gcal → weather → app`.
+All JS modules follow the IIFE pattern: `(function(global){...})(window)`. They attach to `window.Pike.*`. Loading order defined in `index.html` matters: `auth → state → router → db → modal → recurrence → today → week → rhythms → travel → people → tasks → braindump → reminders → quotes → gcal → weather → app`.
 
 ---
 
@@ -381,7 +382,7 @@ The primary cockpit. What Meagan opens every morning. Shows the day holistically
 
 **People events:** Birthday/sobriety anniversaries within 14 days. Rendered by `Pike.people.renderUpcomingEvents()`.
 
-**Reminders card** (`#today-reminders`): Shown when any Brain Dump item has a `dueDate` on or before today + 7 days (including overdue items) and `status !== 'archived'`. Items are sorted by `dueDate` ascending. Each item shows text + a contextual due label ("Due today", "Due tomorrow", "Overdue by N day(s)", "Due [Month Day]"). The container is hidden when no qualifying items exist. Rendered by `today.js` → `renderTodayReminders()`, called from `render()`. This is read-only — clicking goes nowhere; editing is done from Brain Dump.
+**Reminders card** (`#today-reminders`): Shown when any item in `data.reminders[]` has a `dueDate` on or before today + 7 days, is not completed (`!completedAt`), and is not archived (`!archivedAt`). Null-date reminders are excluded (they have no date to compare). Items are sorted by `dueDate` ascending (overdue first). Each item shows text + a contextual due label ("Due today", "Due tomorrow", "Overdue by N day(s)", "Due [Month Day]"). The container is hidden when no qualifying items exist. Rendered by `today.js` → `renderTodayReminders()`, called from `render()`. This is read-only — editing is done from the Reminders section.
 
 **Trip prep card:** Shown when the most imminent upcoming trip departs 1–3 days away (3-day checklist) or 0–1 day away (night-before checklist). Checks sync directly to `trip.checklist3Day` / `trip.checklistNight` in state.
 
@@ -637,9 +638,9 @@ Colored dot shown on sponsee and family cards. Friends show no dot — they have
 
 ### Purpose
 
-A calm parking lot for ideas. No pressure to process. Capture anything: shows, movies, project ideas, things to research, reminders. Category-filter to browse. Promote to tasks when ready.
+A calm parking lot for open-ended ideas. No pressure to process. Capture anything: shows, movies, books, project ideas, links, writing fragments. Category-filter to browse. Promote to tasks when ready.
 
-**Not for:** scheduling, tracking, or acting on items.
+**Not for:** time-bound items, deadlines, or things you need to remember by a date — those belong in **Reminders** (Section 7.5).
 
 ### Owned Data
 
@@ -658,18 +659,17 @@ A calm parking lot for ideas. No pressure to process. Capture anything: shows, m
   promotedTo: null | { type: 'task', targetId: '...', label: 'Task Library' },
   notes: '',
   link: '',
-  dueDate: 'YYYY-MM-DD' | null,   // optional; surfaces item in Today's Reminders card
   checklist: [{ id, text, done }]
 }
 ```
 
+Note: `dueDate` was removed in pike-v22. Time-bound items now live in `data.reminders[]`.
+
 ### Categories
 
-`uncategorized`, `shows`, `movies`, `books`, `podcasts`, `writing`, `claude-projects`, `places`, `other`, `dont-forget`.
+`uncategorized`, `shows`, `movies`, `books`, `podcasts`, `writing`, `claude-projects`, `places`, `other`.
 
-### Reminders Filter
-
-A "Reminders" filter pill appears in the filter bar (after "All", before the category pills). When active, it shows all non-archived items where `item.dueDate` is set, regardless of category. This is a virtual filter — it does not correspond to any category value.
+Note: `dont-forget` was removed in pike-v22. Items with that category were migrated to `data.reminders[]` by the one-time `remindersV1Migrated` migration in `reminders.js init()`.
 
 ### Keyboard Shortcut
 
@@ -690,6 +690,64 @@ After promotion, `bdItem.promotedTo` is set — the item shows a "→ [destinati
 - **Filter "All":** Shows everything that isn't archived.
 - **Empty state (all):** "Nothing here yet. Type something above to save it."
 - **Empty state (filtered):** "Nothing in this category yet."
+
+---
+
+## Section 7.5: Reminders
+
+### Purpose
+
+A dedicated section for time-bound items that need a due date. Distinct from Brain Dump (which is open-ended capture with no deadline). Items surface in Today's Reminders card when due within 7 days.
+
+### Owned Data
+
+- `data.reminders[]`
+- `data.remindersV1Migrated` — one-time migration flag (set `true` after pike-v22 migration runs)
+
+### Item Object Shape
+
+```js
+{
+  id: 'rem_xxx',
+  text: 'Book dentist',                 // required
+  notes: null | 'string',               // optional
+  dueDate: 'YYYY-MM-DD' | null,         // required for new items; null only for migrated legacy items
+  completedAt: null | 'ISO string',     // set when user clicks "Done"
+  archivedAt:  null | 'ISO string',     // set when user clicks "Archive"
+  createdAt: 'ISO string',
+}
+```
+
+**Status is always derived, never stored:**
+- `active` → `!completedAt && !archivedAt`
+- `done` → `completedAt` is set
+- `archived` → `archivedAt` is set
+
+### dueDate Rules
+
+- **New reminders:** `dueDate` is required. The capture form will not submit without it.
+- **Migrated legacy items:** May have `dueDate: null` (migrated from Brain Dump's `dont-forget` category without an explicit date). Shown in the Reminders section with a "Needs date" badge; sorted to the bottom of the active list.
+- **Today card:** Null-date reminders are excluded. Only items with `dueDate !== null && dueDate <= today+7` surface.
+
+### One-Time Migration
+
+Runs in `reminders.js init()`, guarded by `data.remindersV1Migrated`. Migrates from `data.brainDump[]`:
+1. Items with `category === 'dont-forget'` (even if no dueDate)
+2. Items with `dueDate` set (any category)
+3. Deduped by ID; items are **moved** (not copied) — removed from brainDump after migration
+4. `status === 'archived'` → `archivedAt: now`; `promotedTo` set → `completedAt: now`
+
+### Filters
+
+Three filter pills: **Active** (default) | **Done** | **All** (active + done; archived excluded from all views).
+
+### Today Integration
+
+`today.js → renderTodayReminders()` reads `data.reminders[]`, filters `dueDate && !completedAt && !archivedAt && dueDate <= today+7`, sorts ascending. Null-date items are excluded.
+
+### Module
+
+`js/reminders.js` — IIFE, attaches as `Pike.reminders`. Init runs migration once, then calls `render()`. Both `init()` and `render()` are called on boot and on every state change.
 
 ---
 
@@ -897,7 +955,7 @@ These behaviors must never be broken by future refactors, regardless of what the
 
 10. **`data.travelTemplates` must be initialized exactly once** (when null), using `DEFAULT_TEMPLATES` from `travel.js`. Never reinitialize if it already exists — this would wipe template customizations.
 
-11. **The service worker cache version must be bumped whenever CSS or JS files change.** Current version: `pike-v21`. CSS query-string versions (`?v=N`) in `index.html` bust the service worker's network-first cache fetch. Both must be updated together.
+11. **The service worker cache version must be bumped whenever CSS or JS files change.** Current version: `pike-v22`. CSS query-string versions (`?v=N`) in `index.html` bust the service worker's network-first cache fetch. Both must be updated together.
 
 12. **`state.commit()` must be the only path for mutating `state.data`.** Direct assignment to `state.data.someProperty` will not trigger `saveToLocal()`, will not emit the change event, and will not schedule a Supabase push.
 

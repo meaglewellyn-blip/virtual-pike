@@ -175,9 +175,10 @@
     cutoffDate.setDate(cutoffDate.getDate() + 7);
     const cutoffKey = todayKey(cutoffDate);
 
-    // Collect active brain dump items with a dueDate on or before the cutoff
-    const reminders = (data.brainDump || []).filter(
-      (item) => item.dueDate && item.status !== 'archived' && item.dueDate <= cutoffKey
+    // Collect active reminders (data.reminders) due on or before the cutoff.
+    // Null-date items and completed/archived items are excluded.
+    const reminders = (data.reminders || []).filter(
+      (r) => r.dueDate && !r.completedAt && !r.archivedAt && r.dueDate <= cutoffKey
     );
 
     if (!reminders.length) {
