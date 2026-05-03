@@ -201,6 +201,66 @@
     });
   }
 
+  // ── Legacy recurrence migration ─────────────────────────────────────────────
+  // The old data model stored repeating tasks in `data.recurrences`. The new
+  // model uses two separate systems:
+  //   • isDefaultDaily library tasks   (replaces rule.type === 'daily')
+  //   • Weekend Rhythm subtasks         (replaces rule.type === 'everyWeekend')
+  //
+  // This migration runs once (idempotent). It:
+  //   1. Converts any daily recurrences → isDefaultDaily library tasks
+  //   2. Removes everyWeekend recurrences (superseded by rhythm subtasks)
+  //   3. Prunes pending tray tasks generated from removed weekend recurrences
+  //      (completed ones are kept as historical record)
+  function migrateLegacyRecurrences() {
+    const data = global.Pike.state.data;
+    const recs = data.recurrences || [];
+    const dailyRecs   = recs.filter((r) => r.rule?.type === 'daily');
+    const weekendRecs = recs.filter((r) => r.rule?.type === 'everyWeekend');
+    if (!dailyRecs.length && !weekendRecs.length) return;   // nothing to do
+
+    const weekendIds = new Set(weekendRecs.map((r) => r.id));
+    const dailyIds   = new Set(dailyRecs.map((r) => r.id));
+
+    global.Pike.state.commit((d) => {
+      d.tasks       = d.tasks || [];
+      d.recurrences = d.recurrences || [];
+
+      // 1. Promote daily recurrences to isDefaultDaily library tasks
+      dailyRecs.forEach((r) => {
+        const already = d.tasks.some(
+          (t) => t.isDefaultDaily && t.isLibrary && t.title.trim().toLowerCase() === r.title.trim().toLowerCase()
+        );
+        if (!already) {
+          d.tasks.push({
+            id:              'lib-daily-rec-' + r.id,
+            title:           r.title,
+            estimateMinutes: r.estimateMinutes || 30,
+            scheduledDate:   null,
+            scheduledStart:  null,
+            completedAt:     null,
+            isLibrary:       true,
+            isDefaultDaily:  true,
+            category:        r.category || 'self',
+          });
+        }
+      });
+
+      // 2. Remove daily and everyWeekend recurrences from the recurrences array
+      d.recurrences = d.recurrences.filter(
+        (r) => !dailyIds.has(r.id) && !weekendIds.has(r.id)
+      );
+
+      // 3. Prune pending tray tasks that were generated from old everyWeekend
+      //    recurrences. These have no bucket identity and should not auto-appear.
+      //    Completed ones are preserved (historical record).
+      d.tasks = d.tasks.filter((t) => {
+        if (!t.recurrenceId || !weekendIds.has(t.recurrenceId)) return true;
+        return !!t.completedAt; // keep completed, drop pending
+      });
+    });
+  }
+
   function manualRecurrences() {
     return (global.Pike.state.data.recurrences || []).filter((r) => !r.rule);
   }
@@ -228,5 +288,5 @@
   }
 
   global.Pike = global.Pike || {};
-  global.Pike.recurrence = { run, matchesToday, manualRecurrences, quickAddFromLibrary, runDailyDefaults, migrateDailyRhythmsToDefaults };
+  global.Pike.recurrence = { run, matchesToday, manualRecurrences, quickAddFromLibrary, runDailyDefaults, migrateDailyRhythmsToDefaults, migrateLegacyRecurrences };
 })(window);

@@ -192,8 +192,11 @@
     wireSyncIndicator();
     wireWorkdayInput();
     renderTodayPlaceholder();
-    // Migrate daily rhythms → daily-default tasks (idempotent, runs once)
+    // Migrations (idempotent — run once, no-op after):
+    // 1. daily rhythms → isDefaultDaily library tasks
+    // 2. daily/everyWeekend recurrences → pruned/promoted (new bucket model)
     if (Pike.recurrence) Pike.recurrence.migrateDailyRhythmsToDefaults();
+    if (Pike.recurrence) Pike.recurrence.migrateLegacyRecurrences();
     if (Pike.recurrence) Pike.recurrence.run();
     if (Pike.recurrence) Pike.recurrence.runDailyDefaults();
     if (Pike.today) Pike.today.render();
@@ -212,6 +215,7 @@
       // Run recurrence engine on every state change. It's idempotent — most
       // calls are a quick no-op once today's tasks are already generated.
       if (Pike.recurrence) Pike.recurrence.migrateDailyRhythmsToDefaults();
+      if (Pike.recurrence) Pike.recurrence.migrateLegacyRecurrences();
       if (Pike.recurrence) Pike.recurrence.run();
       if (Pike.recurrence) Pike.recurrence.runDailyDefaults();
       if (Pike.today) Pike.today.render();

@@ -285,7 +285,7 @@
     header.appendChild(addBtn);
     wrap.appendChild(header);
 
-    const libraryTasks = (getData().tasks || []).filter((t) => t.isLibrary === true);
+    const libraryTasks = (getData().tasks || []).filter((t) => t.isLibrary === true && !t.isDefaultDaily);
 
     if (!libraryTasks.length) {
       const empty = document.createElement('p');
