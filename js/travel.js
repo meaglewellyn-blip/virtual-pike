@@ -1,6 +1,26 @@
 /* Virtual Pike — Travel module
  * Trips dashboard, trip detail (quantities, supplements, checklists, packing),
  * and trip prep surface in Today/Week views.
+ *
+ * ── Trip checklist persistence invariant ─────────────────────────────────
+ * Trip prep and packing checks are TRIP-LEVEL state, not daily state.
+ * For each trip:
+ *   - checklist3Day, checklistNight, packedItems persist once checked.
+ *   - None of these reset daily. They live on the trip object until the user
+ *     unchecks them, edits trip data, or deletes the trip.
+ *   - They survive Today/Travel renders, reloads, close/reopen, and sync.
+ *
+ * Rules enforced by this module:
+ *   1. NEVER key trip checklist state by todayKey() or any date.
+ *      Keys are itemId only; container is the trip object.
+ *   2. NEVER mutate trip.checklist3Day, trip.checklistNight, or trip.packedItems
+ *      from a render path. The ONLY allowed write paths are the change handlers
+ *      on `.pack-checkbox`, `.pretripcheck`, and `.trip-prep-cb` inputs.
+ *   3. NEVER reinitialize travelTemplates or trip checklist state when existing
+ *      data is present. init() is gated by `!data.trips` / `!data.travelTemplates`
+ *      and the inner mutator double-checks before assigning.
+ *
+ * If you add a new render path or migration, audit it against these three rules.
  */
 
 (function (global) {
@@ -186,6 +206,10 @@
   // ── Init ─────────────────────────────────────────────────────────────────────
 
   function init() {
+    // INVARIANT: Seed defaults ONLY when fields are absent. Never overwrite
+    // an existing trips array or travelTemplates object — that would wipe
+    // user-edited templates and checklist state. The outer `||` and the
+    // inner `if (!d.x)` are both required guards.
     const data = global.Pike.state.data;
     const needsTrips      = !data.trips;
     const needsTemplates  = !data.travelTemplates;
@@ -442,7 +466,8 @@
       });
     });
 
-    // Packing checkboxes
+    // Packing checkboxes — ONLY allowed write path for trip.packedItems.
+    // Keyed by itemId, never by date. Persists until user unchecks.
     container.querySelectorAll('.pack-checkbox').forEach((cb) => {
       cb.addEventListener('change', () => {
         const itemId  = cb.dataset.itemId;
@@ -461,7 +486,9 @@
       });
     });
 
-    // Pre-trip checkboxes
+    // Pre-trip checkboxes — ONLY allowed write path (in trip detail) for
+    // trip.checklist3Day and trip.checklistNight. Keyed by itemId, never
+    // by date. Persists until user unchecks.
     container.querySelectorAll('.pretripcheck').forEach((cb) => {
       cb.addEventListener('change', () => {
         const field  = cb.dataset.field;
@@ -679,6 +706,11 @@
         ${showNight ? checklistSection('Night before',  templates.preTripChecklists.nightBefore, trip.checklistNight || {}, 'checklistNight') : ''}
       </div>`;
 
+    // Today-view trip prep checkboxes — ONLY allowed write path (from Today)
+    // for trip.checklist3Day and trip.checklistNight. Same trip-level state
+    // the Travel detail view writes to; checking here in Today persists into
+    // the trip object and shows checked next time the trip is opened.
+    // Keyed by itemId. NEVER keyed by todayKey() — survives day rollover.
     el.querySelectorAll('.trip-prep-cb').forEach((cb) => {
       cb.addEventListener('change', () => {
         const field  = cb.dataset.field;
