@@ -1112,6 +1112,12 @@
           subtaskId: initial.subtaskId || null,
           isLibrary: initial.isLibrary || false,
           librarySourceId: initial.librarySourceId || null,
+          // Preserve sourceType + createdAt so markers like
+          // 'rhythm-subtask-oneoff' survive an edit. Without this, the
+          // duplicate guard in tasks.js can't recognize the edited task
+          // as an existing one-off and would let the user double-add.
+          sourceType: initial.sourceType || null,
+          createdAt: initial.createdAt || null,
         };
         if (isEdit) {
           const idx = d.tasks.findIndex((x) => x.id === initial.id);

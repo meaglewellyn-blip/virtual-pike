@@ -158,12 +158,33 @@
       r.subtasks.forEach((sub) => {
         const item = document.createElement('div');
         item.className = 'tasks-item tasks-item-rhythm';
-        item.innerHTML = `
-          <div class="tasks-item-info">
-            <div class="tasks-item-title">${esc(sub.title)}</div>
-            ${sub.estimateMinutes ? `<div class="tasks-item-duration">${esc(fmtDuration(sub.estimateMinutes))}</div>` : ''}
-          </div>
+
+        const info = document.createElement('div');
+        info.className = 'tasks-item-info';
+        info.innerHTML = `
+          <div class="tasks-item-title">${esc(sub.title)}</div>
+          ${sub.estimateMinutes ? `<div class="tasks-item-duration">${esc(fmtDuration(sub.estimateMinutes))}</div>` : ''}
         `;
+
+        const actions = document.createElement('div');
+        actions.className = 'tasks-item-actions';
+
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn btn-ghost btn-xs tasks-add-today-btn';
+        // Pre-flight duplicate check so the label reflects current state.
+        const alreadyToday = isWeekendSubtaskAlreadyInToday(r.id, sub.id);
+        if (alreadyToday) {
+          addBtn.textContent = 'Already in Today';
+          addBtn.disabled = true;
+        } else {
+          addBtn.textContent = 'Add to today';
+          addBtn.addEventListener('click', () => addWeekendSubtaskToToday(r, sub, addBtn));
+        }
+
+        actions.appendChild(addBtn);
+        item.appendChild(info);
+        item.appendChild(actions);
         list.appendChild(item);
       });
 
@@ -171,6 +192,54 @@
     });
 
     return wrap;
+  }
+
+  // ─── Weekend Rhythm subtask → one-off Today task ─────────────────────────────
+  // Creates a non-library Today task that mirrors the subtask's title/estimate
+  // but is independent of weekend rhythm allocation/completion. Completing it
+  // marks only the task instance, never the rhythm. Available any day.
+
+  function isWeekendSubtaskAlreadyInToday(rhythmId, subtaskId) {
+    const tk = todayKey();
+    return (getData().tasks || []).some(
+      (t) =>
+        t.scheduledDate === tk &&
+        !t.isLibrary &&
+        t.sourceType === 'rhythm-subtask-oneoff' &&
+        t.rhythmId === rhythmId &&
+        t.subtaskId === subtaskId
+    );
+  }
+
+  function addWeekendSubtaskToToday(rhythm, subtask, btnEl) {
+    // Re-check at click time — state may have changed since render
+    if (isWeekendSubtaskAlreadyInToday(rhythm.id, subtask.id)) {
+      flashBtn(btnEl, 'Already in Today', 2500);
+      return;
+    }
+
+    const tk = todayKey();
+    global.Pike.state.commit((d) => {
+      d.tasks = d.tasks || [];
+      d.tasks.push({
+        id: uid('tsk'),
+        title: subtask.title,
+        estimateMinutes: subtask.estimateMinutes || null,
+        scheduledDate: tk,
+        scheduledStart: null,
+        completedAt: null,
+        isLibrary: false,
+        // Marker that this is a one-off mirror of a Weekend Rhythm subtask.
+        // NOT the same as isRhythmRef (which would auto-mark the subtask done
+        // on completion). This one-off is fully independent of rhythm tracking.
+        sourceType: 'rhythm-subtask-oneoff',
+        rhythmId: rhythm.id,
+        subtaskId: subtask.id,
+        category: 'self',
+        createdAt: new Date().toISOString(),
+      });
+    });
+    flashBtn(btnEl, '✓ Added');
   }
 
   // ─── Daily Defaults section ───────────────────────────────────────────────────
