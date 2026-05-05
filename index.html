@@ -28,9 +28,11 @@
   <link rel="stylesheet" href="styles/tasks.css?v=11">
   <link rel="stylesheet" href="styles/braindump.css?v=4">
   <link rel="stylesheet" href="styles/reminders.css?v=1">
+  <link rel="stylesheet" href="styles/budget.css?v=9">
   <link rel="stylesheet" href="styles/gcal.css?v=5">
   <link rel="stylesheet" href="styles/quotes.css?v=1">
   <link rel="stylesheet" href="styles/auth.css?v=2">
+  <link rel="stylesheet" href="styles/plaid.css?v=2">
 </head>
 <body class="pike-locked">
 
@@ -65,6 +67,7 @@
           <li><a href="#today"     class="nav-link" data-section="today"><span class="nav-dot"></span>Today</a></li>
           <li><a href="#week"      class="nav-link" data-section="week"><span class="nav-dot"></span>Week</a></li>
           <li><a href="#rhythms"   class="nav-link" data-section="rhythms"><span class="nav-dot"></span>Rhythms</a></li>
+          <li><a href="#budget"    class="nav-link" data-section="budget"><span class="nav-dot"></span>Budget</a></li>
           <li><a href="#travel"    class="nav-link" data-section="travel"><span class="nav-dot"></span>Travel</a></li>
           <li><a href="#people"    class="nav-link" data-section="people"><span class="nav-dot"></span>People</a></li>
           <li><a href="#reminders" class="nav-link" data-section="reminders"><span class="nav-dot"></span>Reminders</a></li>
@@ -177,6 +180,14 @@
           <div id="travel-content"></div>
         </section>
 
+        <!-- BUDGET -->
+        <section id="section-budget" class="section">
+          <header class="section-header">
+            <h1>Budget</h1>
+          </header>
+          <div id="budget-content"></div>
+        </section>
+
         <!-- PEOPLE -->
         <section id="section-people" class="section">
           <header class="section-header">
@@ -267,11 +278,11 @@
 
   <!-- App scripts (order matters: auth → state → router → db → recurrence → today → app) -->
   <script src="js/auth.js?v=3"></script>
-  <script src="js/state.js?v=4"></script>
-  <script src="js/router.js?v=3"></script>
-  <script src="js/db.js?v=4"></script>
+  <script src="js/state.js?v=5"></script>
+  <script src="js/router.js?v=4"></script>
+  <script src="js/db.js?v=5"></script>
   <script src="js/modal.js?v=2"></script>
-  <script src="js/recurrence.js?v=5"></script>
+  <script src="js/recurrence.js?v=6"></script>
   <script src="js/today.js?v=7"></script>
   <script src="js/week.js?v=9"></script>
   <script src="js/rhythms.js?v=11"></script>
@@ -280,9 +291,11 @@
   <script src="js/tasks.js?v=12"></script>
   <script src="js/braindump.js?v=6"></script>
   <script src="js/reminders.js?v=1"></script>
+  <script src="js/budget.js?v=12"></script>
   <script src="js/quotes.js?v=3"></script>
   <script src="js/gcal.js?v=4"></script>
+  <script src="js/plaid.js?v=6"></script>
   <script src="js/weather.js?v=3"></script>
-  <script src="js/app.js?v=5"></script>
+  <script src="js/app.js?v=8"></script>
 </body>
 </html>

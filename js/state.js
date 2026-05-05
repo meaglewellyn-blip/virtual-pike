@@ -39,6 +39,22 @@
       brainDump: [],
       reminders: [],
       quotes: [],
+      budget: {
+        version: 1,
+        settings: {
+          currency: 'USD',
+          defaultAccountId: null,
+          weekStartsOn: 1,
+          showCentsOnDashboard: false,
+        },
+        accounts: [],
+        debts: [],
+        payPeriods: [],
+        categories: [],
+        transactions: [],
+        recurringBills: [],
+        rules: [],
+      },
     };
   }
 
@@ -106,12 +122,18 @@
 
   function mergeWithDefaults(incoming) {
     const def = defaultState();
+    const incomingBudget = incoming.budget || {};
     return {
       ...def,
       ...incoming,
       settings: { ...def.settings, ...(incoming.settings || {}) },
       workoutSequence: { ...def.workoutSequence, ...(incoming.workoutSequence || {}) },
       dailyOverrides: incoming.dailyOverrides || {},
+      budget: {
+        ...def.budget,
+        ...incomingBudget,
+        settings: { ...def.budget.settings, ...(incomingBudget.settings || {}) },
+      },
     };
   }
 

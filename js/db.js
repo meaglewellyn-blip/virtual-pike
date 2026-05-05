@@ -69,6 +69,26 @@
     }
     pullOnce();
     subscribe();
+
+    // Flush any pending push immediately when the PWA goes to the background or
+    // the page is about to unload.  Without this, a change made within
+    // PUSH_DEBOUNCE_MS of switching apps never reaches Supabase; on the next
+    // boot pullOnce() finds remoteAt > lastAt (the push that would have updated
+    // lastAt never ran) and calls state.replace() — overwriting the mobile edit.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && pushTimer) {
+        clearTimeout(pushTimer);
+        pushTimer = null;
+        push(global.Pike.state.data);
+      }
+    });
+    window.addEventListener('pagehide', () => {
+      if (pushTimer) {
+        clearTimeout(pushTimer);
+        pushTimer = null;
+        push(global.Pike.state.data);
+      }
+    });
   }
 
   async function pullOnce() {

@@ -1,0 +1,1146 @@
+/* Virtual Pike — Budget styles */
+
+/* ── Dashboard ─────────────────────────────────────────────────────────── */
+
+.budget-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.budget-eyebrow {
+  font: var(--fw-medium) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0;
+}
+
+.budget-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+/* ── Pay-period headline card ──────────────────────────────────────────── */
+
+.budget-pp-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6) var(--space-6) var(--space-5);
+  box-shadow: var(--shadow-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.budget-pp-label {
+  font: var(--fw-medium) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0;
+}
+
+.budget-pp-headline {
+  font: var(--fw-regular) var(--fs-3xl)/var(--lh-tight) var(--font-display);
+  color: var(--text);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-pp-headline.is-negative {
+  color: var(--accent-strong);
+}
+
+.budget-pp-sub {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-pp-bar {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  margin-top: var(--space-3);
+}
+
+.budget-pp-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--dur-base) var(--ease);
+}
+
+.budget-pp-bar-fill.is-over {
+  background: var(--warning);
+}
+
+.budget-pp-debt {
+  margin: var(--space-3) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-pp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.budget-pp-empty-head {
+  font: var(--fw-regular) var(--fs-lg)/var(--lh-tight) var(--font-display);
+  color: var(--text);
+  margin: 0;
+}
+
+.budget-pp-empty-sub {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-2);
+}
+
+/* ── Quick-add row ─────────────────────────────────────────────────────── */
+
+.budget-quick-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.budget-quick-add-btn {
+  flex: 0 0 auto;
+}
+
+/* ── Card (drill-down) ─────────────────────────────────────────────────── */
+
+.budget-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  cursor: pointer;
+  font-family: var(--font-body);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+  transition:
+    transform var(--dur-base) var(--ease),
+    border-color var(--dur-base) var(--ease),
+    box-shadow var(--dur-base) var(--ease);
+  min-height: 132px;
+}
+
+.budget-card:hover {
+  border-color: var(--accent-soft);
+  box-shadow: var(--shadow-2);
+  transform: translateY(-1px);
+}
+
+.budget-card:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-color: var(--accent);
+}
+
+.budget-card-title {
+  font: var(--fw-regular) var(--fs-lg)/var(--lh-tight) var(--font-display);
+  color: var(--text);
+  margin: 0;
+}
+
+.budget-card-blurb {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+  margin: 0;
+  flex: 1;
+}
+
+.budget-card-status {
+  display: inline-block;
+  margin-top: var(--space-2);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Upcoming bills tile ───────────────────────────────────────────────── */
+
+/* ── Top categories card ────────────────────────────────────────────────── */
+
+.budget-top-cats {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.budget-top-cats-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.budget-top-cats-title {
+  font: var(--fw-medium) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0;
+}
+
+.budget-top-cats-viewall {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+
+.budget-top-cats-viewall:hover {
+  color: var(--text-muted);
+}
+
+.budget-top-cats-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.budget-top-cats-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px dashed var(--line-soft);
+}
+
+.budget-top-cats-row:first-child {
+  border-top: none;
+}
+
+.budget-top-cats-name {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  min-width: 0;
+  flex: 1;
+}
+
+.budget-top-cats-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.budget-top-cats-spent {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-top-cats-sub {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-top-cats-sub.is-over {
+  color: var(--warning);
+}
+
+/* ── Upcoming bills ──────────────────────────────────────────────────────── */
+
+.budget-upcoming {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.budget-upcoming-title {
+  font: var(--fw-regular) var(--fs-lg)/var(--lh-tight) var(--font-display);
+  color: var(--text);
+  margin: 0;
+}
+
+.budget-upcoming-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.budget-upcoming-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-top: 1px dashed var(--line-soft);
+}
+
+.budget-upcoming-row:first-child {
+  border-top: none;
+}
+
+.budget-upcoming-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.budget-upcoming-name {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  word-break: break-word;
+}
+
+.budget-upcoming-due {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.budget-upcoming-amount {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── Banner (e.g. unassigned transactions) ─────────────────────────────── */
+
+.budget-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  flex-wrap: wrap;
+}
+
+.budget-banner-text {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+/* ── Focused view ──────────────────────────────────────────────────────── */
+
+.budget-focus {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.budget-back {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font: var(--fw-regular) var(--fs-sm)/1 var(--font-body);
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--dur-fast) var(--ease);
+  margin-bottom: var(--space-2);
+}
+
+.budget-back:hover {
+  color: var(--text);
+}
+
+.budget-back:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.budget-focus-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.budget-focus-header-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.budget-focus-title {
+  font: var(--fw-regular) var(--fs-2xl)/var(--lh-tight) var(--font-display);
+  color: var(--text);
+  margin: 0;
+}
+
+.budget-focus-blurb {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-base);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-3);
+  max-width: 56ch;
+}
+
+.budget-focus-body {
+  margin-top: var(--space-2);
+}
+
+/* ── List + Row ────────────────────────────────────────────────────────── */
+
+.budget-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.budget-empty {
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  margin: 0;
+}
+
+.budget-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-1);
+}
+
+.budget-row.budget-row-tx {
+  grid-template-columns: 16px minmax(0, 1fr) auto auto;
+}
+
+.budget-row-main {
+  min-width: 0;
+}
+
+.budget-row-name {
+  font: var(--fw-regular) var(--fs-md)/var(--lh-tight) var(--font-display);
+  color: var(--text);
+  margin: 0 0 var(--space-1);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.budget-row-meta {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0;
+  line-height: var(--lh-snug);
+  word-break: break-word;
+}
+
+.budget-row-amount-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.budget-row-amount {
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  color: var(--text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-row-amount.is-negative {
+  color: var(--accent-strong);
+}
+
+.budget-row-amount.is-spending { color: var(--text); }
+.budget-row-amount.is-income   { color: var(--success); }
+.budget-row-amount.is-transfer { color: var(--text-muted); }
+
+.budget-row-amount-state {
+  font: var(--fw-medium) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.budget-row-amount-paid {
+  color: var(--sage);
+}
+
+.budget-row-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.budget-action-btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-muted);
+  font: var(--fw-regular) var(--fs-xs)/1 var(--font-body);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  min-height: 32px;
+  transition:
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.budget-action-btn:hover {
+  color: var(--text);
+  border-color: var(--accent-soft);
+  background: var(--surface-2);
+}
+
+.budget-action-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+@media (max-width: 560px) {
+  .budget-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+  .budget-row.budget-row-tx {
+    grid-template-columns: 16px 1fr;
+    grid-template-rows: auto auto auto;
+  }
+  .budget-row.budget-row-tx .budget-row-main {
+    grid-column: 2;
+  }
+  .budget-row.budget-row-tx .budget-row-amount-wrap {
+    grid-column: 2;
+    align-items: flex-start;
+  }
+  .budget-row.budget-row-tx .budget-row-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+  .budget-row-amount-wrap {
+    align-items: flex-start;
+  }
+  .budget-row-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* ── Pay-period status pills ────────────────────────────────────────────── */
+
+.budget-row-status {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  color: var(--text-faint);
+  background: var(--surface-2);
+}
+
+.budget-row-status-active {
+  color: var(--text);
+  border-color: var(--accent-soft);
+  background: var(--accent-soft);
+}
+
+.budget-row-status-upcoming {
+  color: var(--text-muted);
+  border-color: var(--sage-soft);
+  background: var(--sage-soft);
+}
+
+/* ── Transactions filter pills ──────────────────────────────────────────── */
+
+.budget-tx-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.budget-tx-filters {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+
+.budget-filter-pill {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-muted);
+  font: var(--fw-regular) var(--fs-sm)/1 var(--font-body);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.budget-filter-pill.is-active {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--accent-soft);
+}
+
+.budget-filter-pill:hover {
+  color: var(--text);
+}
+
+.budget-filter-pill:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.budget-tx-pill-unassigned {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  background: transparent;
+}
+
+/* ── Recurring pill ─────────────────────────────────────────────────────── */
+
+.budget-tx-pill-recurring {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  color: var(--text-faint);
+  background: transparent;
+  margin-left: var(--space-1);
+}
+
+/* ── Bulk select bar ─────────────────────────────────────────────────────── */
+
+.budget-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--accent-soft);
+  border-radius: var(--radius-lg);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.budget-bulk-count {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  flex: 1;
+}
+
+/* ── Transaction row checkbox ────────────────────────────────────────────── */
+
+.budget-tx-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  margin-top: 2px;
+}
+
+.budget-row.is-selected {
+  background: var(--surface-2);
+}
+
+/* ── Forms (modal-hosted) ───────────────────────────────────────────────── */
+
+.budget-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.budget-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.budget-field > span,
+.budget-field-label {
+  font: var(--fw-medium) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.budget-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.budget-form-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  margin: -8px 0 0;
+  line-height: var(--lh-snug);
+}
+
+.budget-form-hint.is-error {
+  color: var(--warning);
+}
+
+.budget-form-error {
+  background: var(--surface-2);
+  border-left: 3px solid var(--warning);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-sm);
+  color: var(--text);
+  margin: 0;
+  border-radius: var(--radius-sm);
+}
+
+.budget-modal-delete {
+  margin-right: auto;
+  color: var(--accent-strong);
+  border-color: var(--line);
+}
+
+.budget-modal-delete:hover {
+  color: var(--accent-strong);
+  background: var(--surface-2);
+  border-color: var(--accent-soft);
+}
+
+/* ── Allocations editor / Splits editor ─────────────────────────────────── */
+
+.budget-allocations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.budget-allocations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.budget-allocation-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.budget-allocation-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.budget-allocation-row .input {
+  margin: 0;
+}
+
+.budget-allocation-remove {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.budget-allocations-total {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-allocations-total.is-over {
+  color: var(--warning);
+}
+
+/* ── Splits toggle button ───────────────────────────────────────────────── */
+
+.budget-split-toggle {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--text-muted);
+  font: var(--fw-regular) var(--fs-sm)/1 var(--font-body);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  margin-top: -8px;
+}
+
+.budget-split-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent-soft);
+}
+
+.budget-splits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+/* ── Transfer kind pill (inside transfer modal) ─────────────────────────── */
+
+.budget-transfer-kind-pill {
+  display: inline-block;
+  align-self: flex-start;
+  margin: -4px 0 0;
+  padding: 4px var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.budget-transfer-kind-pill.is-internal {
+  color: var(--text-muted);
+  border-color: var(--sage-soft);
+  background: var(--sage-soft);
+}
+
+.budget-transfer-kind-pill.is-debt-payment {
+  color: var(--text);
+  border-color: var(--accent-soft);
+  background: var(--accent-soft);
+}
+
+/* ── Pay-period overlap warning panel ───────────────────────────────────── */
+
+.budget-overlap-warning {
+  background: var(--surface-2);
+  border: 1px solid var(--warning);
+  border-left-width: 4px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  margin-top: -4px;
+}
+
+.budget-overlap-head {
+  font: var(--fw-semibold) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--warning);
+  margin: 0 0 var(--space-2);
+}
+
+.budget-overlap-body {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  margin: 0;
+  line-height: var(--lh-snug);
+}
+
+/* ── Soft "heads up" duplicate warning (inline) ─────────────────────────── */
+
+.budget-warning-note {
+  background: var(--surface-2);
+  border: 1px solid var(--accent-soft);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-sm);
+  color: var(--text);
+  margin: 0;
+  line-height: var(--lh-snug);
+}
+
+.budget-warning-note strong {
+  color: var(--accent-strong);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.04em;
+  margin-right: 4px;
+}
+
+/* ── Net-credit period row (sage tint) ──────────────────────────────────── */
+
+.budget-row-period.is-net-credit {
+  border-color: var(--sage-soft);
+  border-left: 3px solid var(--sage);
+}
+
+.budget-row-amount-state.is-credit {
+  color: var(--success);
+}
+
+/* ── Clickable list rows (period detail entry) ─────────────────────────── */
+
+.budget-row.is-clickable {
+  cursor: pointer;
+  transition:
+    transform var(--dur-base) var(--ease),
+    border-color var(--dur-base) var(--ease),
+    box-shadow var(--dur-base) var(--ease);
+}
+
+.budget-row.is-clickable:hover {
+  border-color: var(--accent-soft);
+  box-shadow: var(--shadow-2);
+}
+
+.budget-row.is-clickable:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-color: var(--accent);
+}
+
+/* ── Per-period detail (sub-drilldown inside Pay periods) ──────────────── */
+
+.budget-period-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.budget-sub-back {
+  margin-bottom: 0;
+}
+
+.budget-period-detail-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.budget-period-detail-title {
+  font: var(--fw-regular) var(--fs-xl)/var(--lh-tight) var(--font-display);
+  color: var(--text);
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.budget-period-detail-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.budget-period-summary {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--lh-snug);
+}
+
+.budget-period-debt-paid {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Per-category breakdown ────────────────────────────────────────────── */
+
+.budget-cat-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-1);
+}
+
+.budget-cat-section-head {
+  font: var(--fw-medium) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0;
+}
+
+.budget-cat-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.budget-cat-empty {
+  margin: 0;
+  border-style: dashed;
+}
+
+.budget-cat-subhead {
+  font: var(--fw-medium) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: var(--space-2) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--line-soft);
+}
+
+.budget-cat-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.budget-cat-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.budget-cat-name {
+  font: var(--fw-regular) var(--fs-base)/var(--lh-tight) var(--font-display);
+  color: var(--text);
+}
+
+.budget-cat-row.is-unallocated .budget-cat-name {
+  color: var(--text);
+}
+
+.budget-cat-status {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-cat-status.is-over {
+  color: var(--warning);
+}
+
+.budget-cat-status.is-untouched {
+  color: var(--text-faint);
+  text-transform: uppercase;
+}
+
+.budget-cat-status.is-credit {
+  color: var(--success);
+}
+
+.budget-cat-amounts {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--lh-snug);
+}
+
+.budget-cat-bar {
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.budget-cat-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--dur-base) var(--ease);
+}
+
+.budget-cat-bar-fill.is-over {
+  background: var(--warning);
+}
+
+/* ── Naive debt-progress sub-line ───────────────────────────────────────── */
+
+.budget-debt-progress {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  margin: var(--space-1) 0 0;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Shared placeholder ─────────────────────────────────────────────────── */
+
+.budget-placeholder {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-7);
+  text-align: center;
+  box-shadow: var(--shadow-1);
+}
+
+.budget-placeholder-eyebrow {
+  font: var(--fw-medium) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 0 var(--space-3);
+}
+
+.budget-placeholder p {
+  color: var(--text-muted);
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-base);
+}

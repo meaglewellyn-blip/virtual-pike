@@ -131,13 +131,16 @@
       return true;
     });
 
-    // Helper: check whether an active instance already exists for today.
+    // Helper: check whether an instance (completed OR active) already exists for today.
     // Matches by librarySourceId (canonical) OR by the deterministic task ID
     // (covers cases where librarySourceId was lost during migration or editing).
+    // NOTE: completed instances MUST count — if we excluded them, completing a daily
+    // default would make it invisible to this guard and a fresh instance would be
+    // spawned on the very next state-change (the "respawn" bug).
     function hasInstance(lib, tasks) {
       const deterministicId = `tsk_default_${lib.id}_${today}`;
       return tasks.some(
-        (t) => !t.completedAt && t.scheduledDate === today &&
+        (t) => t.scheduledDate === today &&
                (t.librarySourceId === lib.id || t.id === deterministicId)
       );
     }

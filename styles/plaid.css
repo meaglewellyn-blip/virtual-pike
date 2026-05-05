@@ -1,0 +1,310 @@
+/* Virtual Pike — Plaid integration styles (Phase 5A) */
+
+/* ── Section wrapper ─────────────────────────────────────────────────────── */
+
+.plaid-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line-soft);
+  margin-top: var(--space-3);
+}
+
+.plaid-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.plaid-status-line {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0;
+  line-height: var(--lh-snug);
+}
+
+/* ── Institution card ────────────────────────────────────────────────────── */
+
+.plaid-institution-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.plaid-institution-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.plaid-institution-name {
+  font: var(--fw-regular) var(--fs-md)/var(--lh-tight) var(--font-display);
+  color: var(--text);
+}
+
+/* ── Account list (preview) ──────────────────────────────────────────────── */
+
+.plaid-account-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.plaid-account-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px dashed var(--line-soft);
+}
+
+.plaid-account-row:first-child {
+  border-top: none;
+}
+
+.plaid-account-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.plaid-account-name {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  word-break: break-word;
+}
+
+.plaid-account-type {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+}
+
+.plaid-account-balance {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Transaction preview ─────────────────────────────────────────────────── */
+
+.plaid-txn-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line-soft);
+}
+
+.plaid-txn-head {
+  font: var(--fw-medium) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0;
+}
+
+.plaid-txn-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.plaid-txn-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px dashed var(--line-soft);
+}
+
+.plaid-txn-row:first-child {
+  border-top: none;
+}
+
+.plaid-txn-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.plaid-txn-merchant {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  word-break: break-word;
+}
+
+.plaid-txn-date {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.plaid-txn-amount {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.plaid-txn-amount.is-income {
+  color: var(--success);
+}
+
+.plaid-txn-more {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  margin: var(--space-2) 0 0;
+  font-style: italic;
+}
+
+/* ── Card action row (Map / Import buttons) ──────────────────────────────── */
+
+.plaid-card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--line-soft);
+  flex-wrap: wrap;
+}
+
+/* ── Mapping status on account rows ─────────────────────────────────────── */
+
+.plaid-account-type.is-mapped {
+  color: var(--success);
+}
+
+/* ── Account mapping modal ───────────────────────────────────────────────── */
+
+.plaid-mapping-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.plaid-mapping-intro {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-1);
+  line-height: var(--lh-snug);
+}
+
+.plaid-mapping-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-top: 1px dashed var(--line-soft);
+}
+
+.plaid-mapping-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.plaid-mapping-acct-name {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  word-break: break-word;
+}
+
+.plaid-mapping-acct-type {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+}
+
+.plaid-mapping-select {
+  flex-shrink: 0;
+  min-width: 180px;
+  max-width: 240px;
+  font-size: var(--fs-sm);
+}
+
+/* ── Import preview modal ────────────────────────────────────────────────── */
+
+.plaid-import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.plaid-import-stats {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.plaid-import-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.plaid-import-stat-num {
+  font: var(--fw-medium) var(--fs-lg)/1 var(--font-display);
+  color: var(--text);
+}
+
+.plaid-import-stat-num.is-muted {
+  color: var(--text-faint);
+}
+
+.plaid-import-stat-label {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+}
+
+.plaid-import-meta {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0;
+  line-height: var(--lh-snug);
+}
+
+.plaid-import-btn-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding-top: var(--space-2);
+}
+
+@media (max-width: 560px) {
+  .plaid-institution-card {
+    padding: var(--space-4);
+  }
+
+  .plaid-mapping-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .plaid-mapping-select {
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+  }
+}
