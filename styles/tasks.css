@@ -127,6 +127,30 @@
   white-space: nowrap;
 }
 
+/* Distinct, visible "Add to today" button — sage outline, not transparent.
+   Used in Tasks > Weekend Rhythm so the action is unmistakable on every row.
+   Opt-in via .btn-add-today (kept separate from .btn-ghost which is muted). */
+.btn.btn-add-today {
+  background: var(--surface);
+  color: var(--sage);
+  border: 1px solid var(--sage);
+  font-weight: var(--fw-medium);
+}
+
+.btn.btn-add-today:hover {
+  background: var(--sage);
+  color: var(--surface);
+  border-color: var(--sage);
+}
+
+.btn.btn-add-today:disabled,
+.btn.btn-add-today[disabled] {
+  background: var(--surface-2);
+  color: var(--text-faint);
+  border-color: var(--line);
+  cursor: default;
+}
+
 /* Extra-small button variant */
 .btn-xs {
   padding: 3px var(--space-2);

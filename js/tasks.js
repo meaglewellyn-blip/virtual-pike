@@ -146,6 +146,11 @@
       return wrap;
     }
 
+    // Diagnostic: confirm in DevTools that this code path is actually running
+    // and that subtasks have the expected fields. Remove after the regression
+    // is fully resolved.
+    let _diagBtns = 0;
+
     rhythms.forEach((r) => {
       const routineLabel = document.createElement('div');
       routineLabel.className = 'tasks-routine-label';
@@ -171,7 +176,9 @@
 
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
-        addBtn.className = 'btn btn-ghost btn-xs tasks-add-today-btn';
+        // Use distinct btn-add-today styling (not btn-ghost) so the action is
+        // visually obvious — sage outline, not transparent.
+        addBtn.className = 'btn btn-add-today btn-xs tasks-add-today-btn';
         // Pre-flight duplicate check so the label reflects current state.
         const alreadyToday = isWeekendSubtaskAlreadyInToday(r.id, sub.id);
         if (alreadyToday) {
@@ -186,10 +193,14 @@
         item.appendChild(info);
         item.appendChild(actions);
         list.appendChild(item);
+        _diagBtns++;
       });
 
       wrap.appendChild(list);
     });
+
+    // One log line per render so it's easy to grep in console for confirmation
+    try { console.log('[Pike tasks] Weekend section rendered with', _diagBtns, 'Add-to-today button(s)'); } catch (_) {}
 
     return wrap;
   }
