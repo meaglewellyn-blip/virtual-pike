@@ -118,8 +118,11 @@
       const events  = (data.events || [])
         .filter((e) => e.date === key)
         .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+      // Week acts as a day history: show scheduled tasks (complete or not) AND
+      // completed unscheduled tasks (daily defaults checked off from the tray).
+      // Active unscheduled tasks (still in the Flexible tray) are excluded.
       const tasks   = (data.tasks || [])
-        .filter((t) => t.scheduledDate === key && t.scheduledStart && !t.isLibrary)
+        .filter((t) => t.scheduledDate === key && !t.isLibrary && (t.scheduledStart || t.completedAt))
         .sort((a, b) => (a.scheduledStart || '').localeCompare(b.scheduledStart || ''));
       const rhythms = rhythmsForDay(date, data.rhythms);
       const gcalTimed  = (data.calendarEvents || [])

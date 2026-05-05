@@ -202,6 +202,27 @@
     if (Pike.recurrence) Pike.recurrence.migrateLegacyRecurrences();
     if (Pike.recurrence) Pike.recurrence.run();
     if (Pike.recurrence) Pike.recurrence.runDailyDefaults();
+
+    // Diagnostic: log daily-default task records for the three most-watched titles.
+    // Helps identify duplicate or stale entries after the recurrence engine runs.
+    // Safe to leave in production — only fires if matching tasks exist.
+    try {
+      const diagTitles = ['get ready', 'meditate', 'reflections'];
+      const rows = (Pike.state.data.tasks || [])
+        .filter((t) => diagTitles.includes((t.title || '').trim().toLowerCase()))
+        .map((t) => ({
+          id: t.id,
+          title: t.title,
+          isLibrary: t.isLibrary,
+          isDefaultDaily: t.isDefaultDaily,
+          librarySourceId: t.librarySourceId,
+          scheduledDate: t.scheduledDate,
+          scheduledStart: t.scheduledStart,
+          completedAt: t.completedAt ? t.completedAt.slice(0, 16) : null,
+        }));
+      if (rows.length) { console.log('[Pike] daily-default diagnostics:'); console.table(rows); }
+    } catch (_) { /* diagnostic only */ }
+
     if (Pike.today) Pike.today.render();
     if (Pike.week) Pike.week.render();
     if (Pike.rhythms) Pike.rhythms.render();

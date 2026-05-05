@@ -120,37 +120,119 @@
     const allDefaults = (data.tasks || []).filter((t) => t.isDefaultDaily && t.isLibrary);
     if (!allDefaults.length) return;
 
-    // Deduplicate library records by title — keep only the first per unique title.
-    // Both migrateDailyRhythmsToDefaults() and migrateLegacyRecurrences() can create
-    // isDefaultDaily lib records for the same habit title, producing duplicate instances.
+    // Build title → [all lib IDs] map BEFORE dedup so hasInstance() can cross-check
+    // every library variant of the same title.  Multiple variants can exist when
+    // migrateDailyRhythmsToDefaults() and migrateLegacyRecurrences() both ran, or
+    // when a user manually created a second library record with the same name.
+    const titleToLibIds = new Map();
+    allDefaults.forEach((lib) => {
+      const k = (lib.title || '').trim().toLowerCase();
+      if (!titleToLibIds.has(k)) titleToLibIds.set(k, []);
+      titleToLibIds.get(k).push(lib.id);
+    });
+
+    // Canonical library record per title (first encountered wins).
     const seenTitles = new Set();
     const defaults = allDefaults.filter((lib) => {
-      const key = lib.title.trim().toLowerCase();
-      if (seenTitles.has(key)) return false;
-      seenTitles.add(key);
+      const k = (lib.title || '').trim().toLowerCase();
+      if (seenTitles.has(k)) return false;
+      seenTitles.add(k);
       return true;
     });
 
-    // Helper: check whether an instance (completed OR active) already exists for today.
-    // Matches by librarySourceId (canonical) OR by the deterministic task ID
-    // (covers cases where librarySourceId was lost during migration or editing).
-    // NOTE: completed instances MUST count — if we excluded them, completing a daily
-    // default would make it invisible to this guard and a fresh instance would be
-    // spawned on the very next state-change (the "respawn" bug).
+    // Does ANY non-library instance for today exist under ANY lib ID that shares
+    // this lib's title?  This prevents re-creation when two library records share
+    // a title but only one was used as the canonical source for an instance.
+    // Completed instances MUST count — excluding them caused the "respawn" bug
+    // where completing a daily default spawned a new copy on the next state change.
     function hasInstance(lib, tasks) {
-      const deterministicId = `tsk_default_${lib.id}_${today}`;
+      const relIds = titleToLibIds.get((lib.title || '').trim().toLowerCase()) || [lib.id];
       return tasks.some(
-        (t) => t.scheduledDate === today &&
-               (t.librarySourceId === lib.id || t.id === deterministicId)
+        (t) => !t.isLibrary && t.scheduledDate === today &&
+               (relIds.includes(t.librarySourceId) ||
+                relIds.some((id) => t.id === `tsk_default_${id}_${today}`))
       );
     }
 
-    // Only commit if at least one default is missing an active instance
-    const needsCommit = defaults.some((lib) => !hasInstance(lib, data.tasks || []));
-    if (!needsCommit) return;
+    // ── Detect what work is needed ───────────────────────────────────────────
+
+    // 1. Same-ID duplicates: the old hasInstance() (which excluded completedAt)
+    //    re-pushed the same deterministic ID for a completed task, leaving two
+    //    objects with the same id in data.tasks.  Array.find() always hits the
+    //    first one — the completed original — so dragging the "active" copy moved
+    //    the completed task onto the timeline and left the active copy in the tray.
+    const idCounts = new Map();
+    (data.tasks || []).forEach((t) => idCounts.set(t.id, (idCounts.get(t.id) || 0) + 1));
+    const hasSameIdDups = [...idCounts.values()].some((n) => n > 1);
+
+    // 2. Title-based duplicates: two non-library instances with the same daily-
+    //    default title on the same day (different IDs, different librarySourceIds).
+    const titleCountsToday = new Map();
+    (data.tasks || []).forEach((t) => {
+      if (t.isLibrary || t.scheduledDate !== today) return;
+      const k = (t.title || '').trim().toLowerCase();
+      if (!seenTitles.has(k)) return;
+      const relIds = titleToLibIds.get(k) || [];
+      if (!relIds.includes(t.librarySourceId) &&
+          !relIds.some((id) => t.id === `tsk_default_${id}_${today}`)) return;
+      titleCountsToday.set(k, (titleCountsToday.get(k) || 0) + 1);
+    });
+    const hasTitleDups = [...titleCountsToday.values()].some((n) => n > 1);
+
+    // 3. Missing instance: no instance at all for a canonical default.
+    const needsNew = defaults.some((lib) => !hasInstance(lib, data.tasks || []));
+
+    if (!hasSameIdDups && !hasTitleDups && !needsNew) return;
 
     global.Pike.state.commit((d) => {
       d.tasks = d.tasks || [];
+
+      // ── Step 1: Remove same-ID duplicates ─────────────────────────────────
+      // Keep the most-progressed copy per ID:
+      //   scheduled + completed > scheduled > completed > active
+      const byId = new Map();
+      d.tasks.forEach((t) => {
+        const prev = byId.get(t.id);
+        if (!prev) { byId.set(t.id, t); return; }
+        const sN = (t.scheduledStart ? 2 : 0) + (t.completedAt ? 1 : 0);
+        const sP = (prev.scheduledStart ? 2 : 0) + (prev.completedAt ? 1 : 0);
+        if (sN > sP) byId.set(t.id, t);
+      });
+      if (byId.size < d.tasks.length) d.tasks = [...byId.values()];
+
+      // ── Step 2: Remove title-based duplicates for today's daily defaults ───
+      // Among all non-library instances for today that belong to a managed title,
+      // keep only the most-progressed one per title.
+      const byTitle = new Map();
+      let foundTitleDup = false;
+      d.tasks.forEach((t) => {
+        if (t.isLibrary || t.scheduledDate !== today) return;
+        const k = (t.title || '').trim().toLowerCase();
+        if (!seenTitles.has(k)) return;
+        const relIds = titleToLibIds.get(k) || [];
+        if (!relIds.includes(t.librarySourceId) &&
+            !relIds.some((id) => t.id === `tsk_default_${id}_${today}`)) return;
+        const prev = byTitle.get(k);
+        if (!prev) { byTitle.set(k, t); return; }
+        foundTitleDup = true;
+        const sN = (t.scheduledStart ? 2 : 0) + (t.completedAt ? 1 : 0);
+        const sP = (prev.scheduledStart ? 2 : 0) + (prev.completedAt ? 1 : 0);
+        if (sN > sP) byTitle.set(k, t);
+      });
+      if (foundTitleDup) {
+        const keepSet = new Set(byTitle.values());
+        d.tasks = d.tasks.filter((t) => {
+          if (t.isLibrary || t.scheduledDate !== today) return true;
+          const k = (t.title || '').trim().toLowerCase();
+          if (!seenTitles.has(k)) return true;
+          const relIds = titleToLibIds.get(k) || [];
+          if (!relIds.includes(t.librarySourceId) &&
+              !relIds.some((id) => t.id === `tsk_default_${id}_${today}`)) return true;
+          return keepSet.has(t);
+        });
+      }
+
+      // ── Step 3: Create missing instances ──────────────────────────────────
       defaults.forEach((lib) => {
         if (!hasInstance(lib, d.tasks)) {
           d.tasks.push({

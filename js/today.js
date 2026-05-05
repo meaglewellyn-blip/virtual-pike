@@ -531,7 +531,7 @@
     const data = getData();
     const tk = todayKey();
     const tasks = (data.tasks || []).filter((t) =>
-      t.scheduledDate === tk && !t.scheduledStart && !t.completedAt
+      t.scheduledDate === tk && !t.scheduledStart && !t.completedAt && !t.isLibrary
     );
 
     if (tasks.length === 0) {
@@ -576,6 +576,10 @@
   // ===== Drag and drop =====
   function wireDropTarget(root) {
     let indicator = null;
+    // Cache the last dragover position so the drop event uses the same
+    // snapped time the guide line showed (layout shift on drop can change clientY).
+    let lastDragoverMin = null;
+
     function ensureIndicator() {
       if (indicator && indicator.parentNode === root) return indicator;
       indicator = document.createElement('div');
@@ -588,13 +592,16 @@
       indicator = null;
     }
 
+    // Shared coordinate helper used by both dragover (guide) and drop (schedule).
+    // Adds root.scrollTop so the calculation is correct when the timeline is scrolled.
+    // Result is clamped to the visible day range.
     function snappedMinutesFromEvent(e) {
       const rect = root.getBoundingClientRect();
-      const y = e.clientY - rect.top;
-      const { startMin } = getTimelineRange();
+      const y = (e.clientY - rect.top) + root.scrollTop;
+      const { startMin, endMin } = getTimelineRange();
       const rawMin = startMin + (y / HOUR_HEIGHT_PX) * 60;
       const snapped = Math.round(rawMin / SNAP_MINUTES) * SNAP_MINUTES;
-      return snapped;
+      return Math.max(startMin, Math.min(endMin, snapped));
     }
 
     root.addEventListener('dragover', (e) => {
@@ -602,6 +609,7 @@
       e.dataTransfer.dropEffect = 'move';
       root.classList.add('is-drop-target');
       const min = snappedMinutesFromEvent(e);
+      lastDragoverMin = min;
       const ind = ensureIndicator();
       ind.style.top = minutesToPx(min) + 'px';
     });
@@ -611,6 +619,7 @@
       if (!root.contains(e.relatedTarget)) {
         root.classList.remove('is-drop-target');
         removeIndicator();
+        lastDragoverMin = null;
       }
     });
 
@@ -621,7 +630,9 @@
       let payload;
       try { payload = JSON.parse(e.dataTransfer.getData('text/plain') || '{}'); }
       catch (_) { payload = {}; }
-      const min = snappedMinutesFromEvent(e);
+      // Prefer cached dragover position — avoids layout-shift clientY drift on drop
+      const min = lastDragoverMin ?? snappedMinutesFromEvent(e);
+      lastDragoverMin = null;
       if (payload.taskId) {
         scheduleTaskAt(payload.taskId, min);
       } else if (payload.rhythmRef) {
