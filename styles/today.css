@@ -942,3 +942,124 @@
     padding: var(--space-4);
   }
 }
+
+/* ===== Daily review notes ===== */
+
+.today-daily-review {
+  margin-top: var(--space-7);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-1);
+}
+
+.today-daily-review-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  gap: var(--space-3);
+}
+
+.today-daily-review-meta {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.today-daily-review-body {
+  position: relative;
+}
+
+.today-daily-review-textarea {
+  width: 100%;
+  font: inherit;
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  resize: vertical;
+  /* About three lines comfortably */
+  min-height: calc(var(--lh-base) * var(--fs-base) * 3 + var(--space-4) * 2);
+  max-height: 320px;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.today-daily-review-textarea::placeholder {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.today-daily-review-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.today-daily-review-expand {
+  margin-top: var(--space-2);
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--fs-xs);
+  color: var(--accent-strong);
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.today-daily-review-expand:hover {
+  color: var(--text);
+}
+
+@media (max-width: 720px) {
+  .today-daily-review {
+    padding: var(--space-4);
+    margin-top: var(--space-5);
+  }
+  .today-daily-review-textarea {
+    padding: var(--space-3);
+  }
+}
+
+/* ===== Daily review modal (used by Today's expand + Week prior-day editor) ===== */
+
+.daily-review-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.daily-review-modal-eyebrow {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.daily-review-modal-textarea {
+  width: 100%;
+  font: inherit;
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  resize: vertical;
+  min-height: 280px;
+}
+
+.daily-review-modal-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}

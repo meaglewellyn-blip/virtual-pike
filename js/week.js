@@ -168,6 +168,17 @@
         itemsHTML += `<div class="week-item is-trip"><span class="week-item-title">✈ ${esc(t.name)}</span></div>`;
       }
 
+      // Daily review note — compact preview, opens full editor on tap
+      const review = (data.dailyReviews || {})[key];
+      if (review && review.notes && review.notes.trim()) {
+        const preview = review.notes.trim();
+        itemsHTML += `
+          <div class="week-item is-daily-note" data-date="${esc(key)}" role="button" tabindex="0" aria-label="Open daily review note">
+            <span class="week-daily-note-icon" aria-hidden="true">✎</span>
+            <span class="week-daily-note-preview">${esc(preview)}</span>
+          </div>`;
+      }
+
       if (!itemsHTML) {
         itemsHTML = `<p class="week-day-empty">Open</p>`;
       }
@@ -224,6 +235,25 @@
     gridEl.querySelectorAll('.week-add-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         if (global.Pike.today) global.Pike.today.openEventModal(null, btn.dataset.date);
+      });
+    });
+
+    // Daily note previews → open the full editor for that specific date.
+    // The date used is ALWAYS the dataset.date on the clicked element — never
+    // inferred from today — so editing prior-day notes can't overwrite today.
+    gridEl.querySelectorAll('.week-item.is-daily-note').forEach((el) => {
+      const openIt = () => {
+        const k = el.dataset.date;
+        if (k && global.Pike.today?.openDailyReviewModal) {
+          global.Pike.today.openDailyReviewModal(k);
+        }
+      };
+      el.addEventListener('click', openIt);
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openIt();
+        }
       });
     });
   }
@@ -383,6 +413,26 @@
     return lines;
   }
 
+  // Collect daily review notes for the week, in date order.
+  // Skips empty days. Notes are returned VERBATIM — no truncation, no
+  // summarization, no AI rewriting. Line breaks are preserved by the renderer
+  // (`white-space: pre-wrap` in CSS).
+  function collectDailyNotes(weekDates) {
+    const data = global.Pike.state.data;
+    const reviews = data.dailyReviews || {};
+    const out = [];
+    weekDates.forEach((date) => {
+      const key = dateKey(date);
+      const entry = reviews[key];
+      if (!entry || !entry.notes || !entry.notes.trim()) return;
+      const dayLabel = date.toLocaleDateString(undefined, {
+        weekday: 'long', month: 'long', day: 'numeric',
+      });
+      out.push({ key, dayLabel, notes: entry.notes });
+    });
+    return out;
+  }
+
   function toggleWeekReview(dates) {
     const reviewEl = document.getElementById('week-review');
     if (!reviewEl) return;
@@ -393,17 +443,36 @@
     }
 
     const lines = generateWeeklyReview(dates);
-    if (!lines.length) {
-      reviewEl.innerHTML = `
-        <div class="week-review-title">This Week in Review</div>
-        <p class="week-review-empty">Nothing tracked yet this week — check back after you've logged some activity.</p>`;
-    } else {
-      reviewEl.innerHTML = `
-        <div class="week-review-title">This Week in Review</div>
+    const dailyNotes = collectDailyNotes(dates);
+
+    let html = `<div class="week-review-title">This Week in Review</div>`;
+
+    if (lines.length) {
+      html += `
         <div class="week-review-lines">
           ${lines.map((l) => `<div class="week-review-line">${esc(l)}</div>`).join('')}
         </div>`;
     }
+
+    if (dailyNotes.length) {
+      // Itemized full notes — paragraphs preserved via .week-review-note-text {white-space: pre-wrap}
+      html += `
+        <div class="week-review-notes-section">
+          <h3 class="week-review-notes-title">Daily notes</h3>
+          ${dailyNotes.map((n) => `
+            <details class="week-review-note" open>
+              <summary class="week-review-note-day">${esc(n.dayLabel)}</summary>
+              <div class="week-review-note-text">${esc(n.notes)}</div>
+            </details>
+          `).join('')}
+        </div>`;
+    }
+
+    if (!lines.length && !dailyNotes.length) {
+      html += `<p class="week-review-empty">Nothing tracked yet this week — check back after you've logged some activity.</p>`;
+    }
+
+    reviewEl.innerHTML = html;
     reviewEl.hidden = false;
   }
 

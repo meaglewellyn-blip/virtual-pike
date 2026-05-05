@@ -26,6 +26,10 @@
         dayEnd: '23:00',
       },
       dailyOverrides: {},   // { 'YYYY-MM-DD': { workdayStart: 'HH:MM' } }
+      // Date-keyed personal review notes. Each date is independent and persists
+      // until the user explicitly clears or edits it. Never reset by render or
+      // sync. Shape: { 'YYYY-MM-DD': { notes: string, updatedAt: ISO } }
+      dailyReviews: {},
       events: [],
       tasks: [],
       recurrences: [],
@@ -129,6 +133,10 @@
       settings: { ...def.settings, ...(incoming.settings || {}) },
       workoutSequence: { ...def.workoutSequence, ...(incoming.workoutSequence || {}) },
       dailyOverrides: incoming.dailyOverrides || {},
+      // Preserve every existing daily review verbatim. Falls back to {} only
+      // if incoming doesn't include the field at all (legacy state). Never
+      // overwrites or strips per-date notes.
+      dailyReviews: incoming.dailyReviews || {},
       budget: {
         ...def.budget,
         ...incomingBudget,

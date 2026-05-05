@@ -189,6 +189,115 @@
   opacity: 0.8;
 }
 
+/* Daily note — soft warm-cream chip, distinct from tasks/events/rhythms.
+   Compact preview (3 lines max), full note opens in modal on click. */
+.week-item.is-daily-note {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-top: 2px;
+  background: color-mix(in srgb, var(--accent-soft) 30%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent-soft) 50%, var(--line-soft));
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  align-items: flex-start;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.week-item.is-daily-note:hover,
+.week-item.is-daily-note:focus-visible {
+  background: color-mix(in srgb, var(--accent-soft) 50%, var(--surface));
+  border-color: var(--accent);
+  outline: none;
+}
+
+.week-daily-note-icon {
+  flex-shrink: 0;
+  font-size: var(--fs-sm);
+  color: var(--accent-strong);
+  line-height: var(--lh-snug);
+}
+
+.week-daily-note-preview {
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  /* Clamp to about 3 lines, fade on overflow */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre-wrap;        /* preserve user's paragraph breaks in preview */
+  word-break: break-word;
+}
+
+/* ── Week Review: full daily-note section ─────────────────────────────────── */
+
+.week-review-notes-section {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line-soft);
+}
+
+.week-review-notes-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  margin: 0 0 var(--space-3) 0;
+  color: var(--text);
+}
+
+.week-review-note {
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.week-review-note[open] {
+  background: var(--surface);
+}
+
+.week-review-note-day {
+  cursor: pointer;
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.02em;
+  list-style: none;
+  position: relative;
+  padding-right: var(--space-5);
+  user-select: none;
+}
+
+.week-review-note-day::-webkit-details-marker { display: none; }
+
+.week-review-note-day::after {
+  content: '⌃';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-30%) rotate(180deg);
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.week-review-note[open] .week-review-note-day::after {
+  transform: translateY(-50%) rotate(0deg);
+}
+
+.week-review-note-text {
+  margin-top: var(--space-3);
+  color: var(--text);
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  white-space: pre-wrap;        /* preserve paragraph breaks verbatim */
+  word-break: break-word;
+}
+
 /* ── Mobile ───────────────────────────────────────────────────────────────────── */
 
 @media (max-width: 720px) {

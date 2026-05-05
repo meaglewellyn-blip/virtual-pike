@@ -161,6 +161,191 @@
     renderTodayRhythms();
     renderTodayReminders();
     if (global.Pike.travel) global.Pike.travel.renderTripPrepForToday();
+    renderDailyReview();
+  }
+
+  // ===== Daily review notes =====
+  // Date-keyed personal notes. The textarea is bound to today's key only.
+  // Editing today's note never touches prior-day notes.
+  // Persistence: every keystroke is debounced (600ms) into Pike.state.commit;
+  // blur flushes immediately. Empty content removes the entry for that date
+  // so it doesn't show up as a stub in Week / Week Review.
+  let _dailyReviewSaveTimer = null;
+  let _dailyReviewLastValue = null;
+
+  function flushDailyReviewSave(dateKey) {
+    if (_dailyReviewSaveTimer) {
+      clearTimeout(_dailyReviewSaveTimer);
+      _dailyReviewSaveTimer = null;
+    }
+    if (_dailyReviewLastValue == null) return;
+    const value = _dailyReviewLastValue;
+    _dailyReviewLastValue = null;
+    saveDailyReview(dateKey, value);
+  }
+
+  function saveDailyReview(dateKey, rawValue) {
+    if (!dateKey) return;
+    const trimmed = String(rawValue || '').trim();
+    global.Pike.state.commit((d) => {
+      if (!d.dailyReviews) d.dailyReviews = {};
+      if (!trimmed) {
+        // Empty after edit → remove the entry intentionally
+        delete d.dailyReviews[dateKey];
+      } else {
+        d.dailyReviews[dateKey] = {
+          notes: rawValue,                 // preserve newlines / whitespace as typed
+          updatedAt: new Date().toISOString(),
+        };
+      }
+    });
+  }
+
+  function renderDailyReview() {
+    const root = document.getElementById('today-daily-review');
+    if (!root) return;
+
+    const tk = todayKey();
+    const data = getData();
+    const entry = (data.dailyReviews || {})[tk] || null;
+    const existing = entry?.notes || '';
+
+    // If the user is currently editing the textarea, do NOT clobber it on a
+    // re-render (e.g. tick(), state.on() chain). Update the timestamp pill only.
+    const currentTextarea = root.querySelector('.today-daily-review-textarea');
+    if (currentTextarea && document.activeElement === currentTextarea) {
+      // Refresh the "updated" pill in place if the value matches saved state
+      updateDailyReviewMeta(root, entry);
+      return;
+    }
+
+    root.innerHTML = `
+      <header class="today-daily-review-header">
+        <h2 class="today-section-title">Daily review notes</h2>
+        <span class="today-daily-review-meta" data-meta></span>
+      </header>
+      <div class="today-daily-review-body">
+        <textarea
+          class="today-daily-review-textarea"
+          rows="3"
+          placeholder="What do you want to remember about today?"
+          aria-label="Daily review notes for today"
+        ></textarea>
+        <button type="button" class="today-daily-review-expand" data-action="expand" aria-expanded="false">Expand</button>
+      </div>
+    `;
+
+    const ta = root.querySelector('.today-daily-review-textarea');
+    const expandBtn = root.querySelector('[data-action="expand"]');
+
+    // Set initial value WITHOUT triggering input handler.
+    ta.value = existing;
+    updateDailyReviewMeta(root, entry);
+    updateExpandVisibility(ta, expandBtn);
+
+    // Debounced auto-save on input
+    ta.addEventListener('input', () => {
+      _dailyReviewLastValue = ta.value;
+      if (_dailyReviewSaveTimer) clearTimeout(_dailyReviewSaveTimer);
+      _dailyReviewSaveTimer = setTimeout(() => {
+        flushDailyReviewSave(tk);
+      }, 600);
+      updateExpandVisibility(ta, expandBtn);
+    });
+
+    // Flush immediately on blur (and also on tab close via beforeunload)
+    ta.addEventListener('blur', () => flushDailyReviewSave(tk));
+
+    // Expand toggle: pop the modal so the user can write more comfortably
+    expandBtn.addEventListener('click', () => {
+      // Flush any pending edit before opening the modal so the modal sees fresh state
+      flushDailyReviewSave(tk);
+      openDailyReviewModal(tk);
+    });
+  }
+
+  function updateDailyReviewMeta(root, entry) {
+    const meta = root.querySelector('[data-meta]');
+    if (!meta) return;
+    if (!entry || !entry.updatedAt) {
+      meta.textContent = '';
+      return;
+    }
+    try {
+      const d = new Date(entry.updatedAt);
+      meta.textContent = `Saved ${fmtClock(d.getHours() * 60 + d.getMinutes())}`;
+    } catch (_) {
+      meta.textContent = '';
+    }
+  }
+
+  function updateExpandVisibility(textarea, btn) {
+    if (!textarea || !btn) return;
+    // Show "Expand" only when content overflows the 3-row default
+    const overflow = textarea.scrollHeight > textarea.clientHeight + 4;
+    btn.hidden = !overflow;
+  }
+
+  // Expanded edit modal — used by the Expand button on Today AND by Week-view
+  // taps on the daily-note preview. The dateKey arg is ALWAYS the day being
+  // edited (never inferred from today). Saves go to that specific key only.
+  function openDailyReviewModal(dateKey) {
+    const data = getData();
+    const entry = (data.dailyReviews || {})[dateKey] || null;
+    const existing = entry?.notes || '';
+
+    // Pretty title — "Notes for Monday, May 4"
+    let dateLabel = dateKey;
+    try {
+      const [y, m, d] = dateKey.split('-').map(Number);
+      const dt = new Date(y, m - 1, d);
+      dateLabel = dt.toLocaleDateString(undefined, {
+        weekday: 'long', month: 'long', day: 'numeric',
+      });
+    } catch (_) { /* fall back to raw key */ }
+
+    const form = document.createElement('form');
+    form.className = 'daily-review-modal-form';
+    form.innerHTML = `
+      <p class="daily-review-modal-eyebrow">${escapeAttr(dateLabel)}</p>
+      <textarea
+        class="daily-review-modal-textarea"
+        rows="14"
+        placeholder="What do you want to remember about this day?"
+        aria-label="Daily review notes for ${escapeAttr(dateLabel)}"
+      ></textarea>
+      <div class="pike-modal-actions">
+        <button type="button" class="btn" data-modal-close="1">Done</button>
+      </div>
+    `;
+
+    const ta = form.querySelector('.daily-review-modal-textarea');
+    // Set value via JS, not innerHTML — preserves a leading newline that the
+    // HTML parser would otherwise strip from textarea content.
+    ta.value = existing;
+    let modalSaveTimer = null;
+    let modalLastValue = null;
+
+    function modalFlush() {
+      if (modalSaveTimer) { clearTimeout(modalSaveTimer); modalSaveTimer = null; }
+      if (modalLastValue == null) return;
+      const value = modalLastValue;
+      modalLastValue = null;
+      saveDailyReview(dateKey, value);
+    }
+
+    ta.addEventListener('input', () => {
+      modalLastValue = ta.value;
+      if (modalSaveTimer) clearTimeout(modalSaveTimer);
+      modalSaveTimer = setTimeout(modalFlush, 600);
+    });
+    ta.addEventListener('blur', modalFlush);
+
+    global.Pike.modal.open({
+      title: 'Daily review notes',
+      body: form,
+      onClose: modalFlush,    // ensure the last edit is saved on any close path
+    });
   }
 
   function renderTodayReminders() {
@@ -1212,8 +1397,16 @@
   function init() {
     document.getElementById('today-add-event')?.addEventListener('click', () => openEventModal(null));
     document.getElementById('today-add-task')?.addEventListener('click', () => openAddTaskModal());
+
+    // Flush any pending daily-review edit when the app backgrounds or unloads.
+    // Pairs with the db.js visibilitychange/pagehide flush — together they
+    // guarantee in-flight notes reach Supabase before the PWA is suspended.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) flushDailyReviewSave(todayKey());
+    });
+    window.addEventListener('pagehide', () => flushDailyReviewSave(todayKey()));
   }
 
   global.Pike = global.Pike || {};
-  global.Pike.today = { init, render, openEventModal };
+  global.Pike.today = { init, render, openEventModal, openDailyReviewModal };
 })(window);
