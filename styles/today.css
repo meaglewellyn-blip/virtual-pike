@@ -301,6 +301,24 @@
   opacity: 0.7;
 }
 
+/* Subtle :30 label in the gutter — half the weight/opacity of hour labels.
+   Helps orient short tasks without adding clutter. */
+.tl-half-label {
+  position: absolute;
+  left: 0;
+  width: var(--gutter);
+  padding-right: var(--space-2);
+  text-align: right;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  background: var(--surface);
+  pointer-events: none;
+  transform: translateY(-7px);
+  opacity: 0.55;
+}
+
 .tl-track {
   position: absolute;
   left: var(--gutter);
@@ -413,6 +431,39 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   margin-top: 2px;
+}
+
+/* Adaptive density for short blocks. The JS sets these classes based on
+   computed pixel height (which mirrors actual duration). The block's height
+   is set in JS — these rules only tune type/padding so the title fits
+   comfortably without the block growing or stealing space from neighbors. */
+
+/* ~16–29 min: tighter padding, single-line title, no time stamp shown */
+.tl-block.is-short {
+  padding: 3px 10px;
+  font-size: var(--fs-xs);
+  line-height: 1.25;
+  border-radius: var(--radius-sm);
+}
+.tl-block.is-short .tl-block-title {
+  -webkit-line-clamp: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ≤ ~15 min: minimal padding, smaller text — block is ~14px tall */
+.tl-block.is-tiny {
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 1.15;
+  letter-spacing: 0;
+  border-radius: 4px;
+}
+.tl-block.is-tiny .tl-block-title {
+  -webkit-line-clamp: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: var(--fw-medium);
 }
 
 /* Fixed event */

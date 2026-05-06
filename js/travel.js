@@ -88,13 +88,14 @@
         { id: 'mk-opt-highlighter', name: 'Highlighter',  optional: true },
       ],
       misc: [
-        { id: 'misc-laptop-ch', name: 'Laptop charger' },
-        { id: 'misc-phone-ch',  name: 'Phone charger' },
-        { id: 'misc-tablet',    name: 'Tablet' },
-        { id: 'misc-earbuds',   name: 'Ear buds' },
-        { id: 'misc-vape-juice',name: 'Vape juice' },
-        { id: 'misc-vape-pods', name: 'Vape pods' },
-        { id: 'misc-zyns',      name: 'Zyns' },
+        { id: 'misc-laptop-ch',     name: 'Laptop charger' },
+        { id: 'misc-phone-ch',      name: 'Phone charger' },
+        { id: 'misc-tablet',        name: 'Tablet' },
+        { id: 'misc-earbuds',       name: 'Ear buds' },
+        { id: 'misc-vape-juice',    name: 'Vape juice' },
+        { id: 'misc-vape-pods',     name: 'Vape pods' },
+        { id: 'misc-zyns',          name: 'Zyns' },
+        { id: 'misc-allergy-spray', name: 'Allergy spray' },
       ],
     },
     preTripChecklists: {
@@ -110,8 +111,8 @@
         { id: 'nb-outfit',  text: 'Layout travel day outfit' },
         { id: 'nb-sheets',  text: 'Change sheets' },
         { id: 'nb-battery', text: 'Charge battery pack' },
-        { id: 'nb-checkin', text: 'Check in for flight (if applicable)' },
-        { id: 'nb-uber',    text: 'Book Uber to airport' },
+        { id: 'nb-checkin', text: 'Check in for flight',     optional: true },
+        { id: 'nb-uber',    text: 'Book Uber to airport',    optional: true },
         { id: 'nb-trash',   text: 'Take out trash' },
       ],
     },
@@ -203,6 +204,63 @@
     return { checked, total };
   }
 
+  // ── Additive template migrations ─────────────────────────────────────────────
+  // These run on every boot but only mutate state when something is genuinely
+  // missing. Never strip user-edited templates, never touch trip-level state.
+
+  // Items to ensure exist in data.travelTemplates.packing.<category>
+  const REQUIRED_TEMPLATE_PACKING_ITEMS = [
+    { category: 'misc', id: 'misc-allergy-spray', name: 'Allergy spray' },
+  ];
+  // Pre-trip items that should be flagged optional (visual-only)
+  const REQUIRED_OPTIONAL_NIGHT_BEFORE_IDS = ['nb-checkin', 'nb-uber'];
+
+  function runAdditiveTemplateMigrations() {
+    const data = global.Pike.state.data;
+    const tpl = data.travelTemplates;
+    if (!tpl) return;  // fresh init() seeds the full DEFAULT_TEMPLATES
+
+    let needsCommit = false;
+
+    // 1) Add any missing packing items (idempotent — checks ID before adding)
+    REQUIRED_TEMPLATE_PACKING_ITEMS.forEach((req) => {
+      const arr = (tpl.packing && tpl.packing[req.category]) || [];
+      if (!arr.some((it) => it.id === req.id)) needsCommit = true;
+    });
+
+    // 2) Ensure optional flag is set on the two pre-trip items
+    const nb = (tpl.preTripChecklists && tpl.preTripChecklists.nightBefore) || [];
+    REQUIRED_OPTIONAL_NIGHT_BEFORE_IDS.forEach((id) => {
+      const it = nb.find((x) => x.id === id);
+      if (it && !it.optional) needsCommit = true;
+    });
+
+    if (!needsCommit) return;
+
+    global.Pike.state.commit((d) => {
+      const t = d.travelTemplates;
+      if (!t) return;
+
+      // Add missing packing items
+      if (t.packing) {
+        REQUIRED_TEMPLATE_PACKING_ITEMS.forEach((req) => {
+          if (!t.packing[req.category]) t.packing[req.category] = [];
+          const arr = t.packing[req.category];
+          if (!arr.some((it) => it.id === req.id)) {
+            arr.push({ id: req.id, name: req.name });
+          }
+        });
+      }
+
+      // Set optional flags on existing pre-trip items
+      const list = (t.preTripChecklists && t.preTripChecklists.nightBefore) || [];
+      REQUIRED_OPTIONAL_NIGHT_BEFORE_IDS.forEach((id) => {
+        const it = list.find((x) => x.id === id);
+        if (it && !it.optional) it.optional = true;
+      });
+    });
+  }
+
   // ── Init ─────────────────────────────────────────────────────────────────────
 
   function init() {
@@ -219,6 +277,12 @@
         if (!d.travelTemplates) d.travelTemplates = DEFAULT_TEMPLATES;
       });
     }
+
+    // Additive template migration. Only ever ADDS missing items or sets a
+    // flag — never removes, renames, or overwrites. Safe to run every boot.
+    // Critical: this must NOT touch any existing trip's checklist3Day,
+    // checklistNight, or packedItems state.
+    runAdditiveTemplateMigrations();
 
     // Wire the header "+ New Trip" button
     const btn = document.getElementById('travel-new-trip');
@@ -351,12 +415,14 @@
         </div>
       </div>`;
 
-    // Pre-trip checklists
+    // Pre-trip checklists. `optional` items get a subtle visual badge — they
+    // are NEVER hidden, required, or auto-completed. Stored field name is
+    // unchanged (still checklistNight); only the displayed label is updated.
     function clHTML(items, checkedObj, fieldName) {
       return items.map((item) => `
-        <label class="pack-item${checkedObj[item.id] ? ' is-checked' : ''}">
+        <label class="pack-item${checkedObj[item.id] ? ' is-checked' : ''}${item.optional ? ' is-optional' : ''}">
           <input type="checkbox" class="pretripcheck" data-field="${esc(fieldName)}" data-item-id="${esc(item.id)}" ${checkedObj[item.id] ? 'checked' : ''}>
-          <span>${esc(item.text)}</span>
+          <span>${esc(item.text)}${item.optional ? ' <span class="opt-badge">optional</span>' : ''}</span>
         </label>`).join('');
     }
 
@@ -414,7 +480,7 @@
           ${clHTML(templates.preTripChecklists.threeDays, trip.checklist3Day || {}, 'checklist3Day')}
         </div>
         <div class="pretripcheck-section" style="margin-top: var(--space-4);">
-          <div class="pretripcheck-header">Night before</div>
+          <div class="pretripcheck-header">24 Hours Before</div>
           ${clHTML(templates.preTripChecklists.nightBefore, trip.checklistNight || {}, 'checklistNight')}
         </div>
       </div>
@@ -430,6 +496,17 @@
         </div>
         ${packingHTML}
         ${suppPackHTML}
+      </div>
+
+      <!-- Custom checklists (additive, trip-scoped, user-managed) -->
+      <div class="trip-section-card trip-custom-card">
+        <div class="trip-custom-header">
+          <h3 class="trip-section-title">Custom checklists</h3>
+          <button type="button" class="btn btn-ghost btn-sm" id="trip-custom-add-section">+ Add section</button>
+        </div>
+        <div class="trip-custom-sections" id="trip-custom-sections">
+          ${renderCustomSectionsHTML(trip)}
+        </div>
       </div>
     `;
 
@@ -503,6 +580,155 @@
           }
         });
         cb.closest('.pack-item')?.classList.toggle('is-checked', checked);
+      });
+    });
+
+    // Wire custom-section interactions (additive, trip-scoped)
+    wireCustomSections(container);
+  }
+
+  // ── Custom checklist sections (per-trip, additive) ───────────────────────────
+  // Lives on trip.customSections — an array of { id, title, items:[{id,label,completed}] }.
+  // Legacy trips without the field use the `trip.customSections || []` fallback.
+  // Never merged into core packing/pre-trip arrays. All writes go through
+  // Pike.state.commit. Completion state persists until the user unchecks/deletes.
+
+  function renderCustomSectionsHTML(trip) {
+    const sections = trip.customSections || [];
+    if (!sections.length) {
+      return `<p class="trip-custom-empty">No custom sections yet. Tap <strong>+ Add section</strong> to create one (e.g. Dresses, Wedding accessories, Road trip groceries).</p>`;
+    }
+    return sections.map((sec) => {
+      const items = sec.items || [];
+      const itemsHTML = items.map((it) => `
+        <label class="pack-item${it.completed ? ' is-checked' : ''}">
+          <input type="checkbox" class="trip-custom-item-cb" data-section-id="${esc(sec.id)}" data-item-id="${esc(it.id)}" ${it.completed ? 'checked' : ''}>
+          <span class="trip-custom-item-label">${esc(it.label)}</span>
+          <button type="button" class="trip-custom-item-del" data-section-id="${esc(sec.id)}" data-item-id="${esc(it.id)}" aria-label="Delete item">×</button>
+        </label>`).join('');
+      return `
+        <div class="trip-custom-section" data-section-id="${esc(sec.id)}">
+          <div class="trip-custom-section-header">
+            <span class="trip-custom-section-title">${esc(sec.title)}</span>
+            <button type="button" class="trip-custom-section-rename" data-section-id="${esc(sec.id)}" aria-label="Rename section">Rename</button>
+            <button type="button" class="trip-custom-section-del" data-section-id="${esc(sec.id)}" aria-label="Delete section">×</button>
+          </div>
+          <div class="trip-custom-items">${itemsHTML}</div>
+          <form class="trip-custom-add-item" data-section-id="${esc(sec.id)}">
+            <input type="text" class="input trip-custom-add-input" placeholder="Add item" maxlength="120" autocomplete="off">
+            <button type="submit" class="btn btn-ghost btn-sm">+</button>
+          </form>
+        </div>`;
+    }).join('');
+  }
+
+  function rerenderCustomSections(container) {
+    const data = global.Pike.state.data;
+    const trip = (data.trips || []).find((t) => t.id === activeTripId);
+    if (!trip) return;
+    const wrap = container.querySelector('#trip-custom-sections');
+    if (wrap) wrap.innerHTML = renderCustomSectionsHTML(trip);
+    wireCustomSections(container);
+  }
+
+  function wireCustomSections(container) {
+    // Add-section button
+    const addSecBtn = container.querySelector('#trip-custom-add-section');
+    if (addSecBtn && !addSecBtn._wired) {
+      addSecBtn.addEventListener('click', () => {
+        const title = (window.prompt('Section title (e.g. Dresses, Wedding accessories):') || '').trim();
+        if (!title) return;
+        global.Pike.state.commit((d) => {
+          const t = (d.trips || []).find((x) => x.id === activeTripId);
+          if (!t) return;
+          if (!Array.isArray(t.customSections)) t.customSections = [];
+          t.customSections.push({ id: uid('cs'), title, items: [] });
+        });
+        rerenderCustomSections(container);
+      });
+      addSecBtn._wired = true;
+    }
+
+    // Per-section: rename, delete, item check, item delete, add item form
+    container.querySelectorAll('.trip-custom-section-rename').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const sid = btn.dataset.sectionId;
+        const data = global.Pike.state.data;
+        const t = (data.trips || []).find((x) => x.id === activeTripId);
+        const sec = t && (t.customSections || []).find((s) => s.id === sid);
+        if (!sec) return;
+        const next = (window.prompt('Rename section:', sec.title) || '').trim();
+        if (!next || next === sec.title) return;
+        global.Pike.state.commit((d) => {
+          const t2 = (d.trips || []).find((x) => x.id === activeTripId);
+          const s2 = t2 && (t2.customSections || []).find((s) => s.id === sid);
+          if (s2) s2.title = next;
+        });
+        rerenderCustomSections(container);
+      });
+    });
+
+    container.querySelectorAll('.trip-custom-section-del').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const sid = btn.dataset.sectionId;
+        if (!confirm('Delete this section and all its items?')) return;
+        global.Pike.state.commit((d) => {
+          const t = (d.trips || []).find((x) => x.id === activeTripId);
+          if (!t || !Array.isArray(t.customSections)) return;
+          t.customSections = t.customSections.filter((s) => s.id !== sid);
+        });
+        rerenderCustomSections(container);
+      });
+    });
+
+    container.querySelectorAll('.trip-custom-item-cb').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const sid = cb.dataset.sectionId;
+        const iid = cb.dataset.itemId;
+        const checked = cb.checked;
+        global.Pike.state.commit((d) => {
+          const t = (d.trips || []).find((x) => x.id === activeTripId);
+          const sec = t && (t.customSections || []).find((s) => s.id === sid);
+          const it = sec && (sec.items || []).find((x) => x.id === iid);
+          if (it) it.completed = checked;
+        });
+        // Inline class toggle for instant visual feedback (no full re-render)
+        cb.closest('.pack-item')?.classList.toggle('is-checked', checked);
+      });
+    });
+
+    container.querySelectorAll('.trip-custom-item-del').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const sid = btn.dataset.sectionId;
+        const iid = btn.dataset.itemId;
+        global.Pike.state.commit((d) => {
+          const t = (d.trips || []).find((x) => x.id === activeTripId);
+          const sec = t && (t.customSections || []).find((s) => s.id === sid);
+          if (sec && Array.isArray(sec.items)) {
+            sec.items = sec.items.filter((x) => x.id !== iid);
+          }
+        });
+        rerenderCustomSections(container);
+      });
+    });
+
+    container.querySelectorAll('.trip-custom-add-item').forEach((form) => {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const sid = form.dataset.sectionId;
+        const input = form.querySelector('.trip-custom-add-input');
+        const label = (input?.value || '').trim();
+        if (!label) return;
+        global.Pike.state.commit((d) => {
+          const t = (d.trips || []).find((x) => x.id === activeTripId);
+          const sec = t && (t.customSections || []).find((s) => s.id === sid);
+          if (!sec) return;
+          if (!Array.isArray(sec.items)) sec.items = [];
+          sec.items.push({ id: uid('ci'), label, completed: false });
+        });
+        if (input) input.value = '';
+        rerenderCustomSections(container);
       });
     });
   }
@@ -690,9 +916,9 @@
         <div class="trip-prep-section">
           <div class="trip-prep-section-title">${esc(title)}</div>
           ${items.map((item) => `
-            <label class="trip-prep-item${checkedObj[item.id] ? ' is-checked' : ''}">
+            <label class="trip-prep-item${checkedObj[item.id] ? ' is-checked' : ''}${item.optional ? ' is-optional' : ''}">
               <input type="checkbox" class="trip-prep-cb" data-field="${esc(field)}" data-item-id="${esc(item.id)}" ${checkedObj[item.id] ? 'checked' : ''}>
-              <span>${esc(item.text)}</span>
+              <span>${esc(item.text)}${item.optional ? ' <span class="opt-badge">optional</span>' : ''}</span>
             </label>`).join('')}
         </div>`;
     }
@@ -702,8 +928,8 @@
     el.innerHTML = `
       <div class="today-trip-prep-card">
         <div class="trip-prep-eyebrow">✈ Trip prep · ${esc(trip.name)} departs ${esc(countdown)}</div>
-        ${show3Day  ? checklistSection('3 days before', templates.preTripChecklists.threeDays,  trip.checklist3Day  || {}, 'checklist3Day')  : ''}
-        ${showNight ? checklistSection('Night before',  templates.preTripChecklists.nightBefore, trip.checklistNight || {}, 'checklistNight') : ''}
+        ${show3Day  ? checklistSection('3 days before',   templates.preTripChecklists.threeDays,  trip.checklist3Day  || {}, 'checklist3Day')  : ''}
+        ${showNight ? checklistSection('24 Hours Before', templates.preTripChecklists.nightBefore, trip.checklistNight || {}, 'checklistNight') : ''}
       </div>`;
 
     // Today-view trip prep checkboxes — ONLY allowed write path (from Today)

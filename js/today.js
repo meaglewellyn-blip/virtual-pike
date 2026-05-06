@@ -557,6 +557,18 @@
       root.appendChild(row);
     }
 
+    // Half-hour labels — subtle "8:30 AM" text in the gutter at every :30
+    // mark. Positioned absolutely; the existing dashed line at .tl-hour-row::after
+    // remains the visual gridline. This adds *labels only*, no extra borders.
+    for (let m = startMin + 30; m < endMin; m += 60) {
+      const lbl = document.createElement('div');
+      lbl.className = 'tl-half-label';
+      lbl.style.top = minutesToPx(m) + 'px';
+      // Strip the leading hour:00 → render "8:30 AM" style
+      lbl.textContent = fmtClock(m);
+      root.appendChild(lbl);
+    }
+
     // Track (events + scheduled tasks render onto this)
     const track = document.createElement('div');
     track.className = 'tl-track';
@@ -658,9 +670,20 @@
     if (b.source)    el.dataset.source = b.source;
 
     const top = minutesToPx(b.startMin);
-    const height = Math.max(28, (b.endMin - b.startMin) / 60 * HOUR_HEIGHT_PX);
+    const durationMin = b.endMin - b.startMin;
+    // Lower floor so short tasks visually reflect their duration.
+    // 10m → 14px, 15m → 16px, 20m → ~21px, 30m → 32px, 60m → 64px.
+    const naturalHeight = durationMin / 60 * HOUR_HEIGHT_PX;
+    const height = Math.max(14, naturalHeight);
     el.style.top = top + 'px';
     el.style.height = height + 'px';
+
+    // Adaptive density classes — CSS uses these to tune padding/font/clamp
+    // so titles stay legible at any duration without growing the block.
+    el.dataset.mins = String(durationMin);
+    if (height < 22)        el.classList.add('is-tiny');     // ≤ ~15m
+    else if (height < 32)   el.classList.add('is-short');    // ~16–29m
+    // ≥30m gets the default treatment
 
     el.dataset.kind = b.kind;
     el.dataset.id = b.id;

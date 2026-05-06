@@ -1,24 +1,21 @@
-/* Virtual Pike — SHA-256 client password gate
+/* Virtual Pike — SHA-256 client username + passphrase gate
  *
- * Mirrors the Triage pattern. Soft gate to keep casual eyes off Pike.
- * NOT a real security boundary — anyone who reads js/db.js can see the
- * Supabase anon key and hit the API directly. The repo will become private
- * once Cloudflare Pages is set up; this gate adds a UI-level barrier.
+ * Soft gate to keep casual eyes off Pike. NOT a real security boundary —
+ * anyone who reads js/db.js can see the Supabase anon key. This is a UI gate.
  *
- * To set the password:
- *   1. In a terminal, run:  echo -n 'YOUR_PASSWORD' | shasum -a 256
- *   2. Copy the 64-char hex hash (everything before the trailing space)
- *   3. Paste it as PIKE_PASSWORD_HASH below and commit.
- *   4. The password itself is never written down — only its hash.
+ * Both fields must match: the form hashes `username:passphrase` and compares
+ * against PIKE_GATE_HASH. To rotate either:
+ *   1. echo -n 'newuser:newpass' | shasum -a 256
+ *   2. Paste the 64-char hex hash below and commit.
+ *   The username and passphrase are never written down — only their joint hash.
  */
 
 (function (global) {
   'use strict';
 
-  // === Pike password (SHA-256 of Meagan's chosen passphrase). ===
-  // The password itself was hashed locally and never written down.
-  // To rotate: run  echo -n 'NEWPASSWORD' | shasum -a 256  and replace below.
-  const PIKE_PASSWORD_HASH = '16c1eed5863a7009ce63bccd720b07899cf09e96ea2fc95701e189c5b04fea6f';
+  // === Pike gate hash = sha256('username:passphrase') ===========
+  // Current credentials hashed locally; the inputs themselves are never stored.
+  const PIKE_GATE_HASH = '51d77e9fe806d2ab12014af224db055a226ab54407956c3e37424408b7c61c5a';
   // ===============================================================
 
   const SESSION_KEY = 'pike.auth.unlocked.v1';
@@ -35,7 +32,8 @@
     try {
       // sessionStorage is used intentionally: it expires when the browser tab
       // (or app) is closed, so Pike re-prompts for the passphrase on every
-      // fresh open — matching the Triage pattern.
+      // fresh open. DO NOT switch to localStorage — that would make the gate
+      // permanent and undermine the lock-on-quit behavior.
       return sessionStorage.getItem(SESSION_KEY) === '1';
     } catch (_) { return false; }
   }
@@ -50,11 +48,13 @@
     document.body.classList.add('pike-locked');
   }
 
-  async function attemptUnlock(input) {
-    const trimmed = (input || '').trim();
-    if (!trimmed) return false;
-    const hash = await sha256(trimmed);
-    if (hash === PIKE_PASSWORD_HASH) {
+  async function attemptUnlock(username, passphrase) {
+    const u = (username || '').trim();
+    const p = (passphrase || '').trim();
+    if (!u || !p) return false;
+    // Joint hash: prevents either field alone from unlocking.
+    const hash = await sha256(u + ':' + p);
+    if (hash === PIKE_GATE_HASH) {
       markUnlocked();
       return true;
     }
@@ -64,24 +64,30 @@
   function lock() {
     try { sessionStorage.removeItem(SESSION_KEY); } catch (_) {}
     markLocked();
-    const input = document.getElementById('pike-gate-input');
-    if (input) { input.value = ''; input.focus(); }
+    const u = document.getElementById('pike-gate-username');
+    const p = document.getElementById('pike-gate-input');
+    if (u) u.value = '';
+    if (p) { p.value = ''; }
+    if (u) u.focus(); else if (p) p.focus();
   }
 
   function wireGateUI() {
     const form  = document.getElementById('pike-gate-form');
-    const input = document.getElementById('pike-gate-input');
-    const error = document.getElementById('pike-gate-error');
-    if (!form || !input) return;
+    const usernameEl = document.getElementById('pike-gate-username');
+    const passEl     = document.getElementById('pike-gate-input');
+    const error      = document.getElementById('pike-gate-error');
+    if (!form || !passEl) return;
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      error.textContent = '';
-      const ok = await attemptUnlock(input.value);
+      if (error) error.textContent = '';
+      const ok = await attemptUnlock(usernameEl?.value, passEl.value);
       if (!ok) {
-        error.textContent = 'Not quite. Try again.';
-        input.value = '';
-        input.focus();
+        if (error) error.textContent = 'Not quite. Try again.';
+        passEl.value = '';
+        // Re-focus username if blank, else password — small UX touch
+        if (usernameEl && !usernameEl.value.trim()) usernameEl.focus();
+        else passEl.focus();
       }
     });
   }
@@ -93,10 +99,11 @@
       markLocked();
     }
     wireGateUI();
-    // Auto-focus the gate input when locked
+    // Auto-focus the username field when locked (or password if no username field)
     if (!isUnlockedLocally()) {
-      const input = document.getElementById('pike-gate-input');
-      if (input) input.focus();
+      const u = document.getElementById('pike-gate-username');
+      const p = document.getElementById('pike-gate-input');
+      if (u) u.focus(); else if (p) p.focus();
     }
   }
 
