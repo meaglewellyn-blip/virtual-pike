@@ -205,10 +205,17 @@
 
   // ── Init ────────────────────────────────────────────────────────────────────
   function init() {
-    Pike.state.commit((d) => {
-      if (!d.calendarEvents)  d.calendarEvents  = [];
-      if (!d.calendarSources) d.calendarSources = {};
-    });
+    // Guard at the OUTER level — the previous version called Pike.state.commit
+    // unconditionally and only checked field presence inside the mutator,
+    // which still fired a push on every boot. That contributed to the
+    // May 11 wipe (boot push of stale state). Only commit when truly needed.
+    const data = Pike.state.data || {};
+    if (!data.calendarEvents || !data.calendarSources) {
+      Pike.state.commit((d) => {
+        if (!d.calendarEvents)  d.calendarEvents  = [];
+        if (!d.calendarSources) d.calendarSources = {};
+      });
+    }
 
     // Check who's connected, then pull their events
     refreshStatus().then(() => syncAll());

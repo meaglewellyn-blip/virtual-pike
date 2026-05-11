@@ -91,6 +91,121 @@
     });
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Hydration gate
+  // ──────────────────────────────────────────────────────────────────────────
+  // The May 11 wipe happened because boot-time init() calls (rhythms, travel,
+  // gcal, etc.) committed against the local/default state BEFORE pullOnce()
+  // resolved. Those commits pushed an effectively-empty payload to Supabase,
+  // overwriting the authoritative remote row.
+  //
+  // The gate below queues every commit until db.js declares hydration done
+  // (or definitively unavailable). After hydration, queued mutators are
+  // applied against the freshest state in a single batch and one consolidated
+  // push goes out.
+  //
+  // db.js calls Pike.state.markHydrated(outcome) where outcome is:
+  //   'hydrated'   — pullOnce returned a remote row and state.replace() ran
+  //   'no-row'     — Supabase has no row for this id yet (first-ever boot)
+  //   'failed'     — pullOnce failed (network, etc.); flush anyway so the
+  //                  user isn't blocked from working offline
+  //   'local-only' — Supabase not configured / supabase-js not loaded
+  //
+  // Failsafe: if db.js never calls markHydrated within HYDRATION_TIMEOUT_MS
+  // (e.g. db.js fails to load entirely), we auto-flush so the app stays usable.
+  const HYDRATION_TIMEOUT_MS = 12000;
+  const pendingMutators = [];
+  let hydrated = false;
+  let hydrationOutcome = null;
+  let hydrationTimer = null;
+
+  function flushPendingMutators() {
+    if (!pendingMutators.length) return;
+    const mutators = pendingMutators.splice(0, pendingMutators.length);
+    let mutated = false;
+    mutators.forEach((m) => {
+      try { m(state.data); mutated = true; } catch (e) { console.error('Pike: queued mutator threw', e); }
+    });
+    if (!mutated) return;
+    state.lastLocalCommitAt = Date.now();
+    saveToLocal(state.data);
+    emit();
+    if (global.Pike?.db?.schedulePush) {
+      global.Pike.db.schedulePush(state.data);
+    }
+  }
+
+  function markHydrated(outcome) {
+    if (hydrated) return;
+    hydrated = true;
+    hydrationOutcome = outcome || 'hydrated';
+    if (hydrationTimer) { clearTimeout(hydrationTimer); hydrationTimer = null; }
+    flushPendingMutators();
+    document.dispatchEvent(new CustomEvent('pike:hydrated', { detail: { outcome: hydrationOutcome } }));
+  }
+
+  // Arm the failsafe immediately so a slow/blocked db.init can't deadlock commits forever.
+  hydrationTimer = setTimeout(() => {
+    if (!hydrated) {
+      console.warn('Pike: hydration timeout — flushing pending commits without remote sync');
+      markHydrated('failed');
+    }
+  }, HYDRATION_TIMEOUT_MS);
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Shrinkage guard
+  // ──────────────────────────────────────────────────────────────────────────
+  // Defence in depth. Even if some future bug commits empty arrays, refuse to
+  // push if any tracked collection drops from non-zero to zero, OR shrinks
+  // by more than SHRINK_REFUSE_PCT. The most recent server sizes are cached
+  // by db.js after successful pull/push. The guard is consulted from db.push
+  // immediately before the upsert via state.evaluatePushSafety(data).
+  const TRACKED_PATHS = [
+    'tasks', 'dailyReviews', 'trips', 'reminders', 'events',
+    'rhythms', 'rhythmCompletions', 'recurrences', 'people',
+    'brainDump', 'quotes', 'dailyOverrides', 'calendarEvents',
+    'workoutSequence.history', 'budget.transactions', 'budget.accounts',
+  ];
+
+  function collectionSize(obj, path) {
+    const parts = path.split('.');
+    let cur = obj;
+    for (const p of parts) {
+      if (cur == null) return 0;
+      cur = cur[p];
+    }
+    if (Array.isArray(cur)) return cur.length;
+    if (cur && typeof cur === 'object') return Object.keys(cur).length;
+    return 0;
+  }
+
+  function getCurrentSizes(data) {
+    const sizes = {};
+    TRACKED_PATHS.forEach((p) => { sizes[p] = collectionSize(data, p); });
+    return sizes;
+  }
+
+  function evaluatePushSafety(data, baseline) {
+    // Returns { ok, reasons[] }. db.js refuses the push if !ok unless the
+    // user has explicitly acknowledged via state.setShrinkOverride(true).
+    if (!baseline) return { ok: true, reasons: [] };
+    const cur = getCurrentSizes(data);
+    const reasons = [];
+    TRACKED_PATHS.forEach((path) => {
+      const before = baseline[path] || 0;
+      const after  = cur[path] || 0;
+      if (before > 0 && after === 0) {
+        reasons.push(`${path}: ${before} → 0 (catastrophic shrink)`);
+      } else if (before >= 10 && after < Math.floor(before * 0.3)) {
+        // >70% drop on a meaningful collection — likely accidental
+        reasons.push(`${path}: ${before} → ${after} (>70% drop)`);
+      }
+    });
+    return { ok: reasons.length === 0, reasons };
+  }
+
+  let shrinkOverride = false;
+
   const state = {
     data: loadFromLocal() || defaultState(),
     rowId: ROW_ID,
@@ -100,14 +215,21 @@
     lastLocalCommitAt: 0,
 
     // Mutate state, save locally, push to remote, broadcast change.
+    // BEFORE HYDRATION: the mutator is QUEUED. It will be applied once db.js
+    // calls markHydrated(). This prevents boot-time inits from racing with
+    // pullOnce and pushing a default/stale state over the authoritative
+    // remote row (the May 11 incident).
     commit(mutator) {
-      if (typeof mutator === 'function') {
-        mutator(state.data);
+      if (typeof mutator !== 'function') return;
+      if (!hydrated) {
+        pendingMutators.push(mutator);
+        return;
       }
+      mutator(state.data);
       state.lastLocalCommitAt = Date.now();
       saveToLocal(state.data);
       emit();
-      if (global.Pike && global.Pike.db && typeof global.Pike.db.schedulePush === 'function') {
+      if (global.Pike?.db?.schedulePush) {
         global.Pike.db.schedulePush(state.data);
       }
     },
@@ -122,12 +244,25 @@
 
     on,
     defaults: defaultState,
+
+    // Hydration API — db.js owns the call.
+    isHydrated: () => hydrated,
+    hydrationOutcome: () => hydrationOutcome,
+    markHydrated,
+
+    // Shrinkage guard API — db.js consults before each push and stores
+    // the post-push server-side sizes via setBaselineSizes().
+    getCurrentSizes,
+    evaluatePushSafety: (data) => evaluatePushSafety(data, state._baselineSizes),
+    setBaselineSizes(sizes) { state._baselineSizes = sizes; },
+    setShrinkOverride(v) { shrinkOverride = !!v; },
+    shouldOverrideShrink: () => shrinkOverride,
   };
 
   function mergeWithDefaults(incoming) {
     const def = defaultState();
     const incomingBudget = incoming.budget || {};
-    return {
+    const merged = {
       ...def,
       ...incoming,
       settings: { ...def.settings, ...(incoming.settings || {}) },
@@ -143,6 +278,9 @@
         settings: { ...def.budget.settings, ...(incomingBudget.settings || {}) },
       },
     };
+    // Strip legacy _localTs (per-device wall-clock) — never reintroduce.
+    delete merged._localTs;
+    return merged;
   }
 
   global.Pike = global.Pike || {};
