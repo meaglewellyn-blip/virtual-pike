@@ -191,6 +191,7 @@
     if (Pike.quotes) Pike.quotes.init();
     if (Pike.gcal)  Pike.gcal.init();
     if (Pike.plaid) Pike.plaid.init();  // async — fires in background, renders when ready
+    if (Pike.settings) Pike.settings.init();  // recovery panel — observability + manual snapshot/export/import
 
     wireSyncIndicator();
     wireWorkdayInput();

@@ -97,7 +97,8 @@
   }
 
   async function pullOnce() {
-    if (!client) { global.Pike.state.markHydrated('failed'); return; }
+    console.info('Pike[telemetry]: hydration-start');
+    if (!client) { global.Pike.state.markHydrated('failed'); console.warn('Pike[telemetry]: hydration-failed (no client)'); return; }
     const rowId = global.Pike.state.rowId;
     try {
       const { data, error } = await client
@@ -106,7 +107,7 @@
         .eq('id', rowId)
         .maybeSingle();
       if (error) {
-        console.warn('Pike: pull failed', error);
+        console.warn('Pike[telemetry]: hydration-failed', error);
         global.Pike.state.markHydrated('failed');
         return;
       }
@@ -127,15 +128,19 @@
         // hydration so queued init commits can flush.
         global.Pike.state.setBaselineSizes(global.Pike.state.getCurrentSizes(global.Pike.state.data));
         global.Pike.state.markHydrated('hydrated');
+        console.info('Pike[telemetry]: hydration-success', { remoteAt, sizes: global.Pike.state.getCurrentSizes(global.Pike.state.data) });
+        // Take a snapshot of the newly-hydrated state so we always have at
+        // least one fresh good copy in the ring after each successful sync.
+        try { global.Pike.state.createSnapshot('pull'); } catch (_) {}
       } else {
         // Row genuinely does not exist yet — first boot on a brand-new project.
         // Allow init seeds to proceed and create the row on first push.
-        console.info('Pike: pullOnce found no remote row — first-boot mode');
+        console.info('Pike[telemetry]: hydration-no-row (first-boot mode)');
         global.Pike.state.setBaselineSizes(global.Pike.state.getCurrentSizes(global.Pike.state.data));
         global.Pike.state.markHydrated('no-row');
       }
     } catch (e) {
-      console.warn('Pike: pull threw', e);
+      console.warn('Pike[telemetry]: hydration-threw', e);
       global.Pike.state.markHydrated('failed');
     }
   }
@@ -184,8 +189,8 @@
     if (!global.Pike.state.shouldOverrideShrink()) {
       const safety = global.Pike.state.evaluatePushSafety(data);
       if (!safety.ok) {
-        console.error('Pike: PUSH REFUSED — local state has shrunk unexpectedly.',
-          'Open the recovery banner to override. Reasons:', safety.reasons);
+        console.error('Pike[telemetry]: push-refused — local state has shrunk unexpectedly.',
+          'Reasons:', safety.reasons);
         document.dispatchEvent(new CustomEvent('pike:push-refused', { detail: { reasons: safety.reasons } }));
         setMode('online');
         return;
@@ -200,7 +205,7 @@
       const { error } = await client
         .from('app_state')
         .upsert({ id: rowId, data, updated_at: pushedAt });
-      if (error) { console.warn('Pike: push failed', error); setMode('online'); return; }
+      if (error) { console.warn('Pike[telemetry]: push-network-failed', error); setMode('online'); return; }
       lastPushedJson = serialized;
       lastPushedAt   = pushedAt;
       // Advance the local sync marker so the next pullOnce() doesn't re-apply
@@ -210,8 +215,12 @@
       // what we just successfully pushed — not the pre-push snapshot.
       global.Pike.state.setBaselineSizes(global.Pike.state.getCurrentSizes(data));
       setMode('online');
+      console.info('Pike[telemetry]: push-accepted', { pushedAt, bytes: serialized.length });
+      // Snapshot after every successful push so the ring always reflects the
+      // last known good remote-confirmed state.
+      try { global.Pike.state.createSnapshot('push'); } catch (_) {}
     } catch (e) {
-      console.warn('Pike: push threw', e);
+      console.warn('Pike[telemetry]: push-threw', e);
       setMode('online');
     }
   }

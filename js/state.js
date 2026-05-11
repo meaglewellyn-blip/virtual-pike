@@ -147,7 +147,7 @@
   // Arm the failsafe immediately so a slow/blocked db.init can't deadlock commits forever.
   hydrationTimer = setTimeout(() => {
     if (!hydrated) {
-      console.warn('Pike: hydration timeout — flushing pending commits without remote sync');
+      console.warn('Pike[telemetry]: hydration-timeout-fallback — flushing pending commits without remote sync');
       markHydrated('failed');
     }
   }, HYDRATION_TIMEOUT_MS);
@@ -257,7 +257,139 @@
     setBaselineSizes(sizes) { state._baselineSizes = sizes; },
     setShrinkOverride(v) { shrinkOverride = !!v; },
     shouldOverrideShrink: () => shrinkOverride,
+
+    // Snapshot ring + manual recovery API. Lives entirely in localStorage —
+    // never interferes with the active state key or any sync path.
+    createSnapshot,
+    listSnapshots,
+    restoreSnapshot,
+    exportJSON,
+    importJSON,
   };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Snapshot ring (pike.backup.1 .. pike.backup.MAX_SNAPSHOTS)
+  // ──────────────────────────────────────────────────────────────────────────
+  // Defence in depth in case the shrinkage guard ever fails to catch a wipe.
+  // - Slot 1 is the newest; oldest rotates out at MAX_SNAPSHOTS.
+  // - Snapshots are taken only after successful hydration AND a state that
+  //   passes the shrinkage health check (so we never archive a corrupted state).
+  // - Each snapshot includes savedAt, source ('push' | 'pull' | 'manual' |
+  //   'pre-import'), and the full state JSON.
+  // - Failures are non-fatal: localStorage quota errors are caught and logged.
+  const SNAPSHOT_PREFIX = 'pike.backup.';
+  const MAX_SNAPSHOTS = 5;
+  const SNAPSHOT_SOURCES = ['push', 'pull', 'manual', 'pre-import'];
+
+  function snapshotKey(slot) { return SNAPSHOT_PREFIX + slot; }
+
+  function isStateSnapshotHealthy(data) {
+    // Use the same evaluatePushSafety guard the network push uses. The baseline
+    // here is the previous snapshot's sizes if available, else current baseline.
+    // If no baseline at all, accept (first-ever snapshot has nothing to compare).
+    if (!data || typeof data !== 'object') return false;
+    const prevSnap = readSnapshot(1);
+    const baseline = prevSnap?.sizes || state._baselineSizes;
+    if (!baseline) return true;
+    return evaluatePushSafety(data, baseline).ok;
+  }
+
+  function readSnapshot(slot) {
+    try {
+      const raw = localStorage.getItem(snapshotKey(slot));
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (_) { return null; }
+  }
+
+  function createSnapshot(source) {
+    const src = SNAPSHOT_SOURCES.includes(source) ? source : 'manual';
+    const data = state.data;
+    if (!isStateSnapshotHealthy(data)) {
+      console.warn('Pike: snapshot skipped — current state failed health check', src);
+      return { ok: false, reason: 'unhealthy-state' };
+    }
+    const entry = {
+      savedAt: new Date().toISOString(),
+      source: src,
+      sizes: getCurrentSizes(data),
+      data,
+    };
+    try {
+      // Rotate: slot MAX → drop, slot N → slot N+1, then write to slot 1
+      try { localStorage.removeItem(snapshotKey(MAX_SNAPSHOTS)); } catch(_) {}
+      for (let i = MAX_SNAPSHOTS - 1; i >= 1; i--) {
+        const cur = localStorage.getItem(snapshotKey(i));
+        if (cur != null) localStorage.setItem(snapshotKey(i + 1), cur);
+      }
+      localStorage.setItem(snapshotKey(1), JSON.stringify(entry));
+      console.info('Pike: snapshot created', { source: src, savedAt: entry.savedAt, sizes: entry.sizes });
+      document.dispatchEvent(new CustomEvent('pike:snapshot-created', { detail: { source: src, savedAt: entry.savedAt } }));
+      return { ok: true, savedAt: entry.savedAt };
+    } catch (e) {
+      console.warn('Pike: snapshot write failed (likely quota)', e);
+      return { ok: false, reason: 'quota' };
+    }
+  }
+
+  function listSnapshots() {
+    const out = [];
+    for (let i = 1; i <= MAX_SNAPSHOTS; i++) {
+      const e = readSnapshot(i);
+      if (e) out.push({ slot: i, savedAt: e.savedAt, source: e.source, sizes: e.sizes });
+    }
+    return out;
+  }
+
+  function restoreSnapshot(slot) {
+    const entry = readSnapshot(slot);
+    if (!entry || !entry.data) return { ok: false, reason: 'not-found' };
+    // Always take a pre-restore safety snapshot of the CURRENT state so the
+    // user can roll back the rollback if they hit the wrong button.
+    createSnapshot('manual');
+    state.replace(entry.data);
+    // After restoring, allow the push to happen even if it looks like shrinkage
+    // (we are intentionally going backwards in time).
+    state.setShrinkOverride(true);
+    if (global.Pike?.db?.schedulePush) global.Pike.db.schedulePush(state.data);
+    setTimeout(() => state.setShrinkOverride(false), 5000);
+    return { ok: true, savedAt: entry.savedAt };
+  }
+
+  function exportJSON() {
+    // Returns the current state as a JSON string. The caller is responsible
+    // for downloading via Blob/anchor.
+    return JSON.stringify(state.data, null, 2);
+  }
+
+  function importJSON(jsonText) {
+    let parsed = null;
+    try { parsed = JSON.parse(jsonText); }
+    catch (e) { return { ok: false, reason: 'invalid-json', detail: String(e) }; }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ok: false, reason: 'not-an-object' };
+    }
+    // Loose validation — at minimum it should look like Pike's state shape.
+    // We don't reject on missing keys (older exports may not have them); we
+    // only reject if it clearly isn't Pike data at all.
+    const looksLikePike = (
+      typeof parsed.version === 'number' ||
+      parsed.tasks !== undefined ||
+      parsed.settings !== undefined ||
+      parsed.brainDump !== undefined
+    );
+    if (!looksLikePike) return { ok: false, reason: 'unrecognized-shape' };
+
+    // Safety snapshot of the current state BEFORE we replace.
+    createSnapshot('pre-import');
+
+    // Replace + push (override shrink guard since the user explicitly asked).
+    state.replace(parsed);
+    state.setShrinkOverride(true);
+    if (global.Pike?.db?.schedulePush) global.Pike.db.schedulePush(state.data);
+    setTimeout(() => state.setShrinkOverride(false), 5000);
+    return { ok: true };
+  }
 
   function mergeWithDefaults(incoming) {
     const def = defaultState();

@@ -32,6 +32,7 @@
   <link rel="stylesheet" href="styles/gcal.css?v=5">
   <link rel="stylesheet" href="styles/quotes.css?v=1">
   <link rel="stylesheet" href="styles/auth.css?v=2">
+  <link rel="stylesheet" href="styles/settings.css?v=1">
   <link rel="stylesheet" href="styles/plaid.css?v=2">
 </head>
 <body class="pike-locked">
@@ -248,6 +249,15 @@
             <h1>Settings</h1>
           </header>
 
+          <!-- Recovery / Backups — manual snapshot ring, export/import, sync status -->
+          <div class="settings-card">
+            <h3 class="settings-section-title">Backups &amp; recovery</h3>
+            <p class="settings-desc">Your local snapshot ring. Pike takes one automatically after every successful sync. Use Export to download a copy you can store anywhere, or Restore to roll back.</p>
+            <div id="settings-recovery">
+              <!-- Rendered by settings.js -->
+            </div>
+          </div>
+
           <div class="settings-card">
             <h3 class="settings-section-title">Google Calendar</h3>
             <p class="settings-desc">Connect your calendars to see events in Today and Week views. Each syncs independently — connect one or both.</p>
@@ -290,9 +300,9 @@
 
   <!-- App scripts (order matters: auth → state → router → db → recurrence → today → app) -->
   <script src="js/auth.js?v=4"></script>
-  <script src="js/state.js?v=7"></script>
+  <script src="js/state.js?v=8"></script>
   <script src="js/router.js?v=4"></script>
-  <script src="js/db.js?v=6"></script>
+  <script src="js/db.js?v=7"></script>
   <script src="js/modal.js?v=2"></script>
   <script src="js/recurrence.js?v=7"></script>
   <script src="js/today.js?v=11"></script>
@@ -308,6 +318,7 @@
   <script src="js/gcal.js?v=5"></script>
   <script src="js/plaid.js?v=6"></script>
   <script src="js/weather.js?v=3"></script>
-  <script src="js/app.js?v=9"></script>
+  <script src="js/settings.js?v=1"></script>
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>

@@ -973,6 +973,117 @@ These behaviors must never be broken by future refactors, regardless of what the
 
 12. **`state.commit()` must be the only path for mutating `state.data`.** Direct assignment to `state.data.someProperty` will not trigger `saveToLocal()`, will not emit the change event, and will not schedule a Supabase push.
 
+13. **Boot-time `state.commit()` calls must NOT fire before the hydration gate opens.** Every module's `init()` is allowed to call `commit()`, but the mutator will be QUEUED until `Pike.db.init()` calls `Pike.state.markHydrated(...)`. This invariant exists because of the May 11 wipe (see Section J below). Any new module's `init()` must assume `Pike.state.data` may be stale or default-empty when called.
+
+14. **A push that drops a tracked collection from non-zero to zero is REFUSED by default.** `db.js push()` consults `Pike.state.evaluatePushSafety(data)` before every upsert. If any tracked collection (`tasks`, `dailyReviews`, `trips`, `reminders`, `events`, `rhythms`, `rhythmCompletions`, `recurrences`, `people`, `brainDump`, `quotes`, `dailyOverrides`, `calendarEvents`, `workoutSequence.history`, `budget.transactions`, `budget.accounts`) drops from non-zero to zero, OR shrinks by more than 70%, the push aborts and emits a `pike:push-refused` console error + DOM event. The override knob is `Pike.state.setShrinkOverride(true)` — only used during deliberate snapshot restore.
+
+15. **Module `init()` functions must guard `commit()` calls at the OUTER level.** Pattern: `if (!data.x || !data.y) Pike.state.commit(m)` — NOT `Pike.state.commit(d => { if (!d.x) ... })`. The May 11 incident root cause was `gcal.js init()` calling `Pike.state.commit` unconditionally with only an inner field check; the commit (and therefore a push) fired every boot regardless of whether anything actually needed to change.
+
+16. **Migrations are additive only.** Never replace a non-empty array. Never overwrite a populated object. The `travel.js runAdditiveTemplateMigrations` pattern is the reference: read current state, compute what's missing, commit a mutator that only adds the missing items. Wholesale replacement (`d.collection = newArray`) is forbidden unless the existing collection is empty.
+
+17. **Missing top-level keys must not replace populated ones in `mergeWithDefaults`.** When merging incoming Supabase data with `defaultState()`, incoming keys override defaults. A defaulted incoming (i.e., `tasks: []`) WILL look like it overrides a populated default — that's why we never default-shape a payload before push.
+
+---
+
+## J. The May 11, 2026 State-Wipe Incident & Hydration Architecture
+
+This section is the canonical write-up of the wipe, the root cause, and the defenses now in place. It MUST be read before any sync/init refactor.
+
+### J.1 What happened
+
+On 2026-05-11 the user opened Pike on iPhone Chrome after several days away (last session 2026-05-06). They observed:
+
+- All `tasks`, `dailyReviews`, `trips`, `reminders`, `events`, `dailyOverrides`, `rhythmCompletions` empty in Supabase.
+- All `budget.transactions` (391 records), `budget.accounts` (5 records) empty.
+- `workoutSequence.history` empty (but `order` array survived).
+- `people` (17), `brainDump` (24), `quotes` (8), `rhythms` (1 weekend rhythm) ALL SURVIVED.
+- `travelTemplates` survived AND contained pike-v40 markers (Allergy spray, optional flags on nb-checkin / nb-uber).
+
+The partial-survival pattern ruled out a clean `defaultState()` overwrite. The fact that pike-v40 markers were in the surviving template implied that pike-v40's `runAdditiveTemplateMigrations` had RUN against this state and committed those changes — which then pushed the entire stale payload.
+
+### J.2 Root cause (verified by code audit)
+
+The boot sequence in `app.js`:
+
+```
+Pike.db.init()        → fires pullOnce() ASYNC (not awaited)
+Pike.rhythms.init()   → may commit (workout order, weekend rhythm seeding)
+Pike.travel.init()    → may commit (travelTemplates seeding + runAdditiveTemplateMigrations)
+Pike.people.init()    → may commit (DEFAULT_PEOPLE seeding)
+Pike.braindump.init() → may commit (brainDumpImportV1 flag)
+Pike.reminders.init() → may commit (V1 migration)
+Pike.quotes.init()    → may commit (DEFAULT_QUOTES seeding)
+Pike.gcal.init()      → committed UNCONDITIONALLY every boot
+```
+
+On a device whose `localStorage[pike.app_state.v1]` was either default or stale (the user's iPhone Chrome — possibly from a fresh install, possibly from eviction), the inits committed against the local snapshot. Each `commit()` triggered a debounced push of the FULL `state.data` to Supabase. By the time `pullOnce()` returned with the authoritative remote data, the staleness guard saw `remoteAt <= lastAt` (the in-flight push had advanced `pike.sync.last_at` to its own `pushedAt`) and SKIPPED `state.replace()`.
+
+Result: stale local state overwrote authoritative remote state, and pullOnce was prevented from correcting it.
+
+### J.3 Recovery
+
+Recovered from `localStorage[pike.app_state.v1]` on a Mac Chrome profile (`meaglewellyn@gmail.com`) that had not been opened since 2026-05-06. That profile's snapshot was 235,362 bytes with `syncKey: 2026-05-06T14:31:45.182Z`. Extracted via Claude-in-Chrome by navigating to `manifest.json` (a static file that does NOT load Pike's JS) and reading `localStorage` via a one-line `javascript_exec`. Restored via direct Supabase REST `POST /rest/v1/app_state?on_conflict=id` with `_localTs` stripped, `updated_at` set to a value strictly newer than the wiped row AND any device's `SYNC_KEY`.
+
+### J.4 Defenses in place (pike-v41 +)
+
+**Hydration gate (`state.js`).** `Pike.state.commit(mutator)` now queues the mutator in `pendingMutators[]` until `Pike.state.markHydrated(outcome)` is called. Outcomes:
+
+- `'hydrated'` — `pullOnce` returned remote data and `state.replace` ran
+- `'no-row'` — Supabase row genuinely doesn't exist (first-ever boot)
+- `'failed'` — pull threw / errored
+- `'local-only'` — Supabase not configured or SDK didn't load
+
+Failsafe: `HYDRATION_TIMEOUT_MS = 12000`. If `markHydrated` is never called, the queue auto-flushes so the app doesn't deadlock for offline users.
+
+**Shrinkage guard (`db.js push()`).** Before every upsert, consults `Pike.state.evaluatePushSafety(data)`. Returns `{ ok, reasons[] }`. If `!ok`, the push is REFUSED and a `pike:push-refused` event fires. Tracked paths: see invariant #14.
+
+**Locked `gcal.js init()`.** The unconditional commit is now wrapped in an outer-level guard:
+
+```js
+if (!data.calendarEvents || !data.calendarSources) {
+  Pike.state.commit((d) => { ... });
+}
+```
+
+**Snapshot ring (`state.js`).** Up to 5 prior states held in `localStorage[pike.backup.1..5]`. Snapshots are created automatically:
+- After `pullOnce` successfully replaces state (`source: 'pull'`)
+- After every successful `push` (`source: 'push'`)
+- Manually via the Settings panel (`source: 'manual'`)
+- Automatically before any `importJSON` overwrite (`source: 'pre-import'`)
+
+Snapshots are skipped if the current state fails the shrinkage health check (so we never archive a corrupted state).
+
+**`_localTs` stripping.** `mergeWithDefaults` deletes any incoming `_localTs` field. Per-device wall clocks must NEVER be used for sync-freshness authority.
+
+**Recovery UI (`settings.js`).** Settings → Backups & recovery surfaces: hydration outcome, last sync time, state size, the snapshot ring with timestamps, and three buttons: Take snapshot now / Export backup / Import backup. Each restore/import takes a pre-action safety snapshot.
+
+### J.5 Telemetry markers
+
+The following `console.info`/`console.warn`/`console.error` lines are intentional telemetry — do not strip:
+
+- `Pike[telemetry]: hydration-start`
+- `Pike[telemetry]: hydration-success` — includes remote `updated_at` + sizes
+- `Pike[telemetry]: hydration-no-row` — first-boot path
+- `Pike[telemetry]: hydration-failed` — pull errored
+- `Pike[telemetry]: hydration-threw` — exception in pull
+- `Pike[telemetry]: hydration-timeout-fallback` — 12s failsafe fired
+- `Pike[telemetry]: push-accepted` — includes pushedAt + bytes
+- `Pike[telemetry]: push-refused` — includes reasons; also `pike:push-refused` DOM event
+- `Pike[telemetry]: push-network-failed` — Supabase returned an error
+- `Pike[telemetry]: push-threw` — exception in push
+- `Pike: snapshot created` — also `pike:snapshot-created` DOM event
+
+### J.6 Rules for new modules
+
+If you add a module with an `init()`, the following MUST hold:
+
+1. **Do not assume state is hydrated.** Read `Pike.state.data` defensively (`(data.X || [])`). Treat absence and emptiness as legitimate states.
+2. **Guard your `commit()` calls at the outer level.** Never call `Pike.state.commit(d => { if (!d.x) ... })` unconditionally — that fires a push every boot.
+3. **Mutations must be additive.** If your migration needs to "fix" a record, only add fields; do not replace arrays or wholesale-overwrite objects.
+4. **Use `Pike.state.commit`.** Never write to `Pike.state.data` directly. Never write to `localStorage[pike.app_state.v1]` directly.
+5. **Add tracked paths to the shrinkage guard.** If your module owns a new top-level collection, add its path to `TRACKED_PATHS` in `state.js` so the guard can protect it.
+6. **Add telemetry markers.** Every state-mutating decision in `init()` should emit a `console.info('Pike[module]: …')` line. Future incident response depends on these markers.
+
 ---
 
 *End of VIRTUAL_PIKE_SOURCE_OF_TRUTH.md*
