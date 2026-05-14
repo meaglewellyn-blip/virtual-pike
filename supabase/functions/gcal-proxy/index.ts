@@ -108,48 +108,118 @@ serve(async (req: Request) => {
   }
 
   // ── events ─────────────────────────────────────────────────────────────────
+  // Contract: on success → { events: [...] } with 200. On any auth-state
+  // problem (no token row, missing refresh_token, refresh failed) →
+  // { error: 'token_expired', source, reconnectRequired: true } with 401.
+  // On Google API failure (network, quota, other) → { error: 'fetch_failed',
+  // detail } with 502. The client treats anything other than 200+array as
+  // "do not touch existing calendarEvents" — see js/gcal.js syncSource().
   if (action === 'events') {
+    const src = source || 'personal';
     const { data: tokenRow } = await db
       .from('calendar_tokens')
       .select('*')
-      .eq('id', source || 'personal')
+      .eq('id', src)
       .single();
 
-    if (!tokenRow) return json({ error: 'not_connected' }, 401);
+    if (!tokenRow) return json({ error: 'not_connected', source: src, reconnectRequired: true }, 401);
 
     let accessToken = tokenRow.access_token;
-    if (new Date(tokenRow.token_expiry) <= new Date()) {
-      const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: CLIENT_ID,
-          client_secret: CLIENT_SECRET,
-          refresh_token: tokenRow.refresh_token,
-          grant_type: 'refresh_token',
-        }),
-      });
-      const refreshed = await refreshRes.json();
-      if (!refreshed.error) {
+    const tokenExpired = !tokenRow.token_expiry || new Date(tokenRow.token_expiry) <= new Date();
+
+    if (tokenExpired) {
+      // Refresh path — if it fails for ANY reason we bail with a clear
+      // reconnect signal so the client surfaces a Reconnect button.
+      if (!tokenRow.refresh_token) {
+        return json({ error: 'token_expired', source: src, reconnectRequired: true, detail: 'missing_refresh_token' }, 401);
+      }
+      try {
+        const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: CLIENT_ID,
+            client_secret: CLIENT_SECRET,
+            refresh_token: tokenRow.refresh_token,
+            grant_type: 'refresh_token',
+          }),
+        });
+        const refreshed = await refreshRes.json();
+        if (refreshed.error || !refreshed.access_token) {
+          // invalid_grant (refresh token revoked/expired) — common in
+          // Google Cloud Testing-mode apps where refresh tokens expire
+          // after 7 days. Surface as reconnect-required.
+          return json({
+            error: 'token_expired',
+            source: src,
+            reconnectRequired: true,
+            detail: refreshed.error || 'refresh_no_access_token',
+          }, 401);
+        }
         accessToken = refreshed.access_token;
-        await db.from('calendar_tokens').update({
-          access_token: accessToken,
-          token_expiry: new Date(Date.now() + (refreshed.expires_in || 3600) * 1000).toISOString(),
-        }).eq('id', source);
+        // Best-effort persist; failure here doesn't block the events fetch.
+        try {
+          await db.from('calendar_tokens').update({
+            access_token: accessToken,
+            token_expiry: new Date(Date.now() + (refreshed.expires_in || 3600) * 1000).toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq('id', src);
+        } catch (_) { /* persistence error is non-fatal for this call */ }
+      } catch (err) {
+        return json({
+          error: 'token_expired',
+          source: src,
+          reconnectRequired: true,
+          detail: 'refresh_threw: ' + ((err as Error).message || 'unknown'),
+        }, 401);
       }
     }
 
-    const timeMin = new Date().toISOString();
-    const timeMax = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-    const eventsRes = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
-      `timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&` +
-      `singleEvents=true&orderBy=startTime&maxResults=100`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-    const eventsData = await eventsRes.json();
-    if (eventsData.error) return json({ error: eventsData.error.message }, 400);
-    return json({ events: eventsData.items || [] });
+    // Fetch window: 7 days back (covers in-progress / today's earlier events)
+    // and 35 days forward (covers ~5 weeks of upcoming planning).
+    const timeMin = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000).toISOString();
+    const timeMax = new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString();
+    try {
+      const eventsRes = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
+        `timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&` +
+        `singleEvents=true&orderBy=startTime&maxResults=250`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const eventsData = await eventsRes.json();
+      if (eventsData.error) {
+        // Google returned an error AFTER auth succeeded — could be quota,
+        // calendar not found, or a transient Google issue. The client must
+        // NOT clear existing events in this case.
+        // Auth-shaped error codes (401/403 from Google) → reconnect.
+        const gErr = eventsData.error;
+        const isAuth = gErr.code === 401 || gErr.code === 403 ||
+          /credential|invalid|unauthorized|permission/i.test(gErr.message || '');
+        if (isAuth) {
+          return json({
+            error: 'token_expired',
+            source: src,
+            reconnectRequired: true,
+            detail: gErr.message || 'google_auth_rejected',
+          }, 401);
+        }
+        return json({
+          error: 'fetch_failed',
+          source: src,
+          detail: gErr.message || 'google_api_error',
+        }, 502);
+      }
+      if (!Array.isArray(eventsData.items)) {
+        return json({ error: 'fetch_failed', source: src, detail: 'malformed_response' }, 502);
+      }
+      return json({ events: eventsData.items });
+    } catch (err) {
+      return json({
+        error: 'fetch_failed',
+        source: src,
+        detail: 'fetch_threw: ' + ((err as Error).message || 'unknown'),
+      }, 502);
+    }
   }
 
   // ── disconnect ─────────────────────────────────────────────────────────────

@@ -178,3 +178,20 @@
   font-style: italic;
   opacity: 0.8;
 }
+
+/* ── Sync error / reconnect state (May 14 calendar regression UX) ─────────
+   Surfaces the source's lastError under the email line. Soft warning amber
+   so it's noticeable but not alarming. The Reconnect button to the right
+   uses btn-primary so it draws the user's eye. */
+.gcal-source-row.is-errored {
+  border-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 6%, var(--surface));
+}
+
+.gcal-source-error {
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  color: #8a5a2a;
+  line-height: var(--lh-snug);
+  max-width: 320px;
+}
