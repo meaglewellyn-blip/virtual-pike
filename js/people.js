@@ -298,7 +298,9 @@
 
     catEl.addEventListener('change', () => {
       const cat = catEl.value;
-      datesRow.hidden   = cat === 'sponsee';
+      // Sponsees now also get birthday + sobriety fields. Cadence is
+      // sponsee-only (family/friends have implicit cadence or none).
+      datesRow.hidden   = false;
       cadenceRow.hidden = cat !== 'sponsee';
     });
 
@@ -310,8 +312,9 @@
       const cat      = String(fd.get('category'));
       const isSponsee = cat === 'sponsee';
       const cadence  = isSponsee ? (parseInt(fd.get('cadenceDays'), 10) || 7) : (cat === 'family' ? 180 : null);
-      const birthday = isSponsee ? null : (String(fd.get('birthday') || '').trim() || null);
-      const sobriety = isSponsee ? null : (String(fd.get('sobrietyDate') || '').trim() || null);
+      // Birthday + sobriety are recorded for ALL categories now, including sponsees.
+      const birthday = String(fd.get('birthday')     || '').trim() || null;
+      const sobriety = String(fd.get('sobrietyDate') || '').trim() || null;
 
       global.Pike.state.commit((d) => {
         d.people = d.people || [];
@@ -387,9 +390,28 @@
           </label>
         </div>
       </div>
+
+      <!-- Sponsees can ALSO record birthday + sobriety date. Same fields, same
+           upcoming-events surfacing on Today, sober-years badge inside the card. -->
+      <div class="person-modal-section">
+        <div class="person-modal-section-title">Dates <span class="muted">(for upcoming reminders)</span></div>
+        <div class="person-dates-row">
+          <label>
+            <span>Birthday</span>
+            <input type="text" class="input" name="birthday" maxlength="5"
+              placeholder="MM-DD e.g. 03-15" value="${esc(person.birthday || '')}">
+          </label>
+          <label>
+            <span>Sobriety date</span>
+            <input type="text" class="input" name="sobrietyDate"
+              placeholder="YYYY-MM-DD e.g. 2019-06-01" value="${esc(person.sobrietyDate || '')}">
+          </label>
+        </div>
+        ${ys !== null ? `<div class="person-sober-years">${ys} year${ys !== 1 ? 's':''}  sober 🌿</div>` : ''}
+      </div>
       ` : `
       <div class="person-modal-section">
-        <div class="person-modal-section-title">Dates <span class="muted">(for 2-week reminders)</span></div>
+        <div class="person-modal-section-title">Dates <span class="muted">(for upcoming reminders)</span></div>
         <div class="person-dates-row">
           <label>
             <span>Birthday</span>
@@ -516,6 +538,12 @@
             currentStep: isNaN(step) ? null : step,
             notes: String(fd.get('stepNotes') || '').trim(),
           },
+          // Sponsees can now also record birthday + sobriety date — same
+          // fields family/friends use, so upcoming-events on Today surface
+          // their anniversaries too (getUpcomingEvents reads p.sobrietyDate /
+          // p.birthday regardless of category).
+          birthday:     String(fd.get('birthday')     || '').trim() || null,
+          sobrietyDate: String(fd.get('sobrietyDate') || '').trim() || null,
         });
       } else {
         savePerson(personId, {

@@ -2,8 +2,9 @@
  *
  *   Pike.modal.open({
  *     title: 'Add event',
- *     body: HTMLElement | string,    // string is interpreted as HTML
- *     onClose: () => void,           // optional
+ *     body: HTMLElement | string,           // string is interpreted as HTML
+ *     onOpen: (bodyEl) => void,             // optional — wire handlers after DOM is in place
+ *     onClose: () => void,                  // optional
  *   });
  *
  *   Pike.modal.close();
@@ -16,7 +17,7 @@
 
   function $(id) { return document.getElementById(id); }
 
-  function open({ title = '', body = '', onClose = null } = {}) {
+  function open({ title = '', body = '', onOpen = null, onClose = null } = {}) {
     const root = $('pike-modal');
     const titleEl = $('pike-modal-title');
     const bodyEl = $('pike-modal-body');
@@ -33,6 +34,13 @@
     onCloseFn = onClose;
     root.hidden = false;
     document.body.style.overflow = 'hidden';
+
+    // Run any caller-supplied setup hook against the rendered body BEFORE
+    // the autofocus fires, so handlers are already wired when the user
+    // can interact. (May 14 fix: quotes.js relied on this being supported.)
+    if (typeof onOpen === 'function') {
+      try { onOpen(bodyEl); } catch (e) { console.error('Pike modal onOpen threw', e); }
+    }
 
     // Focus the first focusable element
     setTimeout(() => {

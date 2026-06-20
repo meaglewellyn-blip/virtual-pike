@@ -159,7 +159,15 @@
 
     if (isHardError) {
       const reason = (body && body.error) || `http_${status || 'unknown'}`;
-      const reconnectRequired = !!(body && body.reconnectRequired) || status === 401;
+      // reconnectRequired triggers when:
+      //  (a) the server explicitly set reconnectRequired: true (new Edge Function), OR
+      //  (b) status is 401 (any standard auth-failure response), OR
+      //  (c) the error string smells like an auth problem — covers the OLD
+      //      Edge Function path that returns Google's "invalid authentication
+      //      credentials" body with HTTP 400 (the May 14 calendar regression).
+      const errStr = String(reason || '') + ' ' + String((body && body.detail) || '');
+      const looksAuthRelated = /credential|oauth|invalid[_ ]grant|authentication|token|unauthor/i.test(errStr);
+      const reconnectRequired = !!(body && body.reconnectRequired) || status === 401 || looksAuthRelated;
       console.warn('Pike[telemetry]: gcal-sync-failed', {
         source, status, reason, reconnectRequired, detail: body && body.detail,
       });
