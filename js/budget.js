@@ -403,10 +403,12 @@
   // Estimates re-true themselves whenever the user re-anchors the account
   // balance from a fresh statement. Returns null when amortizing isn't possible.
   function amortizedDebtStatus(dbt) {
-    if (!dbt.aprBps) return null;
+    if (dbt.aprBps == null) return null;   // 0 is valid — 0% BNPL loans amortize dollar-for-dollar
     const b = getBudget();
     const linked = (b.accounts || []).find((a) => a.id === dbt.accountId);
-    if (!linked || !linked.startingBalanceDate) return null;
+    // Loans only: credit-card balances move with every purchase, so their
+    // truth is the live imported-transaction balance, never an amortization.
+    if (!linked || linked.type !== 'loan' || !linked.startingBalanceDate) return null;
     const matchVal = (dbt.paymentMatchValue || '').toLowerCase().trim();
 
     const anchorDate = linked.startingBalanceDate;
@@ -746,16 +748,21 @@
     }
     if (viewId === 'debts') {
       const debts = (b.debts || []);
-      if (!debts.length) return 'No debts tracked';
-      const owed = debts.reduce((sum, d) => {
-        const linked = (b.accounts || []).find((a) => a.id === d.accountId);
-        return sum + Math.abs(linked ? accountBalance(linked) : 0);
+      const debtAccounts = (b.accounts || []).filter(
+        (a) => !a.archived && DEBT_ACCOUNT_TYPES.includes(a.type)
+      );
+      if (!debtAccounts.length && !debts.length) return 'No debts tracked';
+      const owed = debtAccounts.reduce((sum, a) => {
+        const dbt = debts.find((d) => d.accountId === a.id);
+        const amort = dbt ? amortizedDebtStatus(dbt) : null;
+        return sum + (amort ? amort.balance : Math.abs(accountBalance(a)));
       }, 0);
       const period = activePeriod();
       const paid = period ? debtPaidThisPeriodCents(period) : 0;
+      const n = debtAccounts.length;
       return paid > 0
         ? `${formatCents(owed)} owed · ${formatCents(paid)} paid this period`
-        : `${formatCents(owed)} owed · ${debts.length} ${debts.length === 1 ? 'debt' : 'debts'}`;
+        : `${formatCents(owed)} owed · ${n} ${n === 1 ? 'account' : 'accounts'}`;
     }
     if (viewId === 'payperiods') {
       const period = activePeriod();
@@ -1564,23 +1571,77 @@
   // ─── Debts ───────────────────────────────────────────────────────────────────
 
   function buildDebtsView() {
-    const debts = getBudget().debts || [];
+    const b = getBudget();
+    const debts = b.debts || [];
+    const debtAccounts = (b.accounts || []).filter(
+      (a) => !a.archived && DEBT_ACCOUNT_TYPES.includes(a.type)
+    );
     const wrap = document.createElement('div');
     wrap.className = 'budget-list';
-    if (!debts.length) {
+
+    if (!debtAccounts.length && !debts.length) {
       wrap.appendChild(buildEmpty('No debts tracked yet. Tap + Debt to add a credit card or loan.'));
       return wrap;
     }
-    debts.forEach((dbt) => wrap.appendChild(buildDebtRow(dbt)));
+
+    // One row per debt-type account — credit cards auto-included with their
+    // live imported balance, no manual entry required. Debt entries whose
+    // account was archived still render so history isn't hidden.
+    const rows = debtAccounts.map((acc) => ({
+      acc,
+      dbt: debts.find((d) => d.accountId === acc.id) || null,
+    }));
+    debts.forEach((d) => {
+      if (!rows.some((r) => r.dbt && r.dbt.id === d.id)) {
+        rows.push({ acc: (b.accounts || []).find((a) => a.id === d.accountId) || null, dbt: d });
+      }
+    });
+
+    // Total headline — amortized estimate where available, live balance otherwise.
+    let cardsTotal = 0;
+    let loansTotal = 0;
+    rows.forEach(({ acc, dbt }) => {
+      if (!acc) return;
+      const amort = dbt ? amortizedDebtStatus(dbt) : null;
+      const owed = amort ? amort.balance : Math.abs(accountBalance(acc));
+      if (acc.type === 'loan') loansTotal += owed;
+      else cardsTotal += owed;
+    });
+    if (cardsTotal + loansTotal > 0) {
+      const head = document.createElement('div');
+      head.className = 'budget-debts-total';
+      const label = document.createElement('span');
+      label.className = 'budget-debts-total-label';
+      label.textContent = 'Total debt';
+      const amt = document.createElement('span');
+      amt.className = 'budget-debts-total-amount';
+      amt.textContent = formatCents(cardsTotal + loansTotal);
+      const split = document.createElement('span');
+      split.className = 'budget-debts-total-split';
+      split.textContent = `${formatCents(cardsTotal)} cards · ${formatCents(loansTotal)} loans`;
+      head.appendChild(label);
+      head.appendChild(amt);
+      head.appendChild(split);
+      wrap.appendChild(head);
+    }
+
+    // Loans first (richer progress lines), then cards, each alphabetical.
+    rows.sort((x, y) => {
+      const tx = x.acc ? x.acc.type : 'zz';
+      const ty = y.acc ? y.acc.type : 'zz';
+      if ((tx === 'loan') !== (ty === 'loan')) return tx === 'loan' ? -1 : 1;
+      return (x.acc ? x.acc.name : '').localeCompare(y.acc ? y.acc.name : '');
+    });
+    rows.forEach(({ acc, dbt }) => wrap.appendChild(buildDebtRow(dbt, acc)));
     return wrap;
   }
 
-  function buildDebtRow(dbt) {
+  function buildDebtRow(dbt, accOverride) {
     const row = document.createElement('div');
     row.className = 'budget-row';
 
     const accounts = getBudget().accounts || [];
-    const linked = accounts.find((a) => a.id === dbt.accountId);
+    const linked = accOverride || (dbt ? accounts.find((a) => a.id === dbt.accountId) : null);
 
     const main = document.createElement('div');
     main.className = 'budget-row-main';
@@ -1589,17 +1650,22 @@
     name.textContent = linked ? linked.name : '(account missing)';
     const meta = document.createElement('p');
     meta.className = 'budget-row-meta';
-    const kindLabel = (DEBT_KINDS.find((k) => k.id === dbt.kind) || {}).label || dbt.kind;
-    const apr = dbt.aprBps ? (dbt.aprBps / 100).toFixed(2) + '% APR' : '';
-    const min = dbt.minimumPaymentCents ? `min ${formatCents(dbt.minimumPaymentCents)}/mo` : '';
-    meta.textContent = [kindLabel, apr, min].filter(Boolean).join(' · ');
+    if (dbt) {
+      const kindLabel = (DEBT_KINDS.find((k) => k.id === dbt.kind) || {}).label || dbt.kind;
+      const apr = dbt.aprBps ? (dbt.aprBps / 100).toFixed(2) + '% APR' : '';
+      const min = dbt.minimumPaymentCents ? `min ${formatCents(dbt.minimumPaymentCents)}/mo` : '';
+      meta.textContent = [kindLabel, apr, min].filter(Boolean).join(' · ');
+    } else {
+      const typeLabel = (ACCOUNT_TYPES.find((t) => t.id === (linked && linked.type)) || {}).label || '';
+      meta.textContent = `${typeLabel} · live balance from imported transactions`;
+    }
     main.appendChild(name);
     main.appendChild(meta);
 
-    // Progress line: amortized when the debt has APR + an anchored account,
-    // otherwise the quiet naive estimate.
-    const amort = amortizedDebtStatus(dbt);
-    const progressText = amort ? amortProgressLineText(dbt, amort) : debtProgressLineText(dbt);
+    // Progress line: amortized when the debt has APR + an anchored loan
+    // account, otherwise the quiet naive estimate. Entry-less card rows skip it.
+    const amort = dbt ? amortizedDebtStatus(dbt) : null;
+    const progressText = !dbt ? null : (amort ? amortProgressLineText(dbt, amort) : debtProgressLineText(dbt));
     if (progressText) {
       const progress = document.createElement('p');
       progress.className = 'budget-debt-progress';
@@ -1633,8 +1699,8 @@
       stateLine.textContent = accountBalanceState(linked);
       amountWrap.appendChild(stateLine);
     }
-    // Paid-this-period sub-line
-    const paid = debtPaidForDebtThisPeriod(dbt);
+    // Paid-this-period sub-line (works for entry-less rows via the account id)
+    const paid = linked ? debtPaidForDebtThisPeriod(dbt || { accountId: linked.id }) : 0;
     if (paid > 0) {
       const paidLine = document.createElement('span');
       paidLine.className = 'budget-row-amount-state budget-row-amount-paid';
@@ -1644,18 +1710,27 @@
 
     const actions = document.createElement('div');
     actions.className = 'budget-row-actions';
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'budget-action-btn';
-    editBtn.textContent = 'Edit';
-    editBtn.addEventListener('click', () => openDebtModal(dbt));
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'budget-action-btn';
-    removeBtn.textContent = 'Remove';
-    removeBtn.addEventListener('click', () => removeDebt(dbt.id));
-    actions.appendChild(editBtn);
-    actions.appendChild(removeBtn);
+    if (dbt) {
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'budget-action-btn';
+      editBtn.textContent = 'Edit';
+      editBtn.addEventListener('click', () => openDebtModal(dbt));
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'budget-action-btn';
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', () => removeDebt(dbt.id));
+      actions.appendChild(editBtn);
+      actions.appendChild(removeBtn);
+    } else {
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'budget-action-btn';
+      addBtn.textContent = 'Add details';
+      addBtn.addEventListener('click', () => openDebtModal(null, linked && linked.id));
+      actions.appendChild(addBtn);
+    }
 
     row.appendChild(main);
     row.appendChild(amountWrap);
@@ -1663,9 +1738,10 @@
     return row;
   }
 
-  function openDebtModal(existing) {
+  function openDebtModal(existing, prefillAccountId) {
     const isEdit = !!existing;
     const dbt = existing || {};
+    if (!isEdit && prefillAccountId) dbt.accountId = prefillAccountId;
     const accounts = (getBudget().accounts || []).filter(
       (a) => !a.archived && DEBT_ACCOUNT_TYPES.includes(a.type)
     );

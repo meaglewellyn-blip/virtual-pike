@@ -1144,3 +1144,40 @@
   font-size: var(--fs-sm);
   line-height: var(--lh-base);
 }
+
+/* ── Debts: total headline ─────────────────────────────────────────────────── */
+
+.budget-debts-total {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-2);
+}
+
+.budget-debts-total-label {
+  font: var(--fw-medium) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.budget-debts-total-amount {
+  font-family: var(--font-mono);
+  font-size: var(--fs-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-debts-total-split {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+@media (max-width: 520px) {
+  .budget-debts-total { flex-wrap: wrap; }
+  .budget-debts-total-split { margin-left: 0; flex-basis: 100%; }
+}
