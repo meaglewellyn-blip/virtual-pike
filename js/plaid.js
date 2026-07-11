@@ -27,6 +27,7 @@
   let previewTxns     = [];   // [{ item_id, institution, added }]
   let connecting      = false;
   let importingItemId = null; // item currently being fetched for import
+  let lastError       = null; // user-visible message from the most recent Plaid failure
 
   // ── General helpers ───────────────────────────────────────────────────────────
 
@@ -147,12 +148,14 @@
   async function connect() {
     if (connecting) return;
     connecting = true;
+    lastError = null;
     render();
     try {
       await loadSdk();
       const { link_token, error } = await callEdge({ action: 'link-token' });
       if (error || !link_token) {
         console.warn('Pike: plaid link-token error', error);
+        lastError = `Couldn't start Plaid Link: ${error || 'no link token returned'}`;
         connecting = false; render(); return;
       }
       const handler = global.Plaid.create({
@@ -161,11 +164,21 @@
           handler.destroy();
           connecting = false;
           const institution = metadata.institution || {};
-          await callEdge({ action: 'exchange' }, {
-            public_token,
-            institution_id:   institution.institution_id || null,
-            institution_name: institution.name           || null,
-          });
+          const instName = institution.name || 'bank';
+          try {
+            const res = await callEdge({ action: 'exchange' }, {
+              public_token,
+              institution_id:   institution.institution_id || null,
+              institution_name: institution.name           || null,
+            });
+            if (res && res.error) {
+              console.warn('Pike: plaid exchange failed', res.error);
+              lastError = `Plaid Link finished, but connecting ${instName} failed server-side: ${res.error}`;
+            }
+          } catch (e) {
+            console.warn('Pike: plaid exchange failed', e);
+            lastError = `Plaid Link finished, but connecting ${instName} failed server-side: ${e.message}`;
+          }
           await refreshStatus();
           await fetchPreview();
           render();
@@ -173,13 +186,17 @@
         onExit: (err) => {
           handler.destroy();
           connecting = false;
-          if (err) console.warn('Pike: plaid link exit error', err);
+          if (err) {
+            console.warn('Pike: plaid link exit error', err);
+            lastError = `Plaid Link closed with an error: ${err.display_message || err.error_message || err.error_code || 'unknown'}`;
+          }
           render();
         },
       });
       handler.open();
     } catch (e) {
       console.warn('Pike: plaid connect failed', e);
+      lastError = `Couldn't open Plaid Link: ${e.message}`;
       connecting = false; render();
     }
   }
@@ -191,6 +208,7 @@
   async function openManageAccounts(item) {
     if (connecting) return;
     connecting = true;
+    lastError = null;
     render();
     try {
       await loadSdk();
@@ -200,6 +218,7 @@
       );
       if (error || !link_token) {
         console.warn('Pike: plaid link-token-update error', error);
+        lastError = `Couldn't open account management for ${item.institution_name || 'this bank'}: ${error || 'no link token returned'}`;
         connecting = false; render(); return;
       }
       const handler = global.Plaid.create({
@@ -750,6 +769,14 @@
     oauthNote.className   = 'plaid-status-line';
     oauthNote.textContent = 'Tip: if "Add another bank" opens an existing bank instead of institution search, type the new bank name in the search box, or use a private window.';
     wrap.appendChild(oauthNote);
+
+    if (lastError) {
+      const errLine = document.createElement('p');
+      errLine.className = 'plaid-status-line';
+      errLine.style.color = 'var(--warning)';
+      errLine.textContent = lastError;
+      wrap.appendChild(errLine);
+    }
 
     connectedItems.forEach((item) => {
       const card = document.createElement('div');
