@@ -1616,14 +1616,21 @@
     const toCreate = computeMissingPeriods(d.budget);
     if (!toCreate.length) return 0;
     if (!d.budget.payPeriods) d.budget.payPeriods = [];
+    // Default allocation templates, one per half-month (rent lands in one
+    // half, so their budgets differ). Backfilled PAST periods stay empty —
+    // stamping a plan onto history she never made would be dishonest.
+    const templates = (d.budget.settings && d.budget.settings.defaultAllocations) || {};
+    const today = todayKey();
     toCreate.forEach((c) => {
+      const key = parseInt(c.startDate.slice(8), 10) <= 15 ? 'firstHalf' : 'secondHalf';
+      const tmpl = (c.endDate >= today && templates[key]) ? templates[key] : [];
       d.budget.payPeriods.push({
         id:                  uid('pp'),
         label:               semimonthlyLabel(c.startDate, c.endDate),
         startDate:           c.startDate,
         endDate:             c.endDate,
         expectedIncomeCents: c.expectedIncomeCents,
-        allocations:         [],
+        allocations:         tmpl.map((a) => ({ ...a })),
         notes:               '',
       });
     });
@@ -2642,6 +2649,25 @@
     });
     form.querySelector('input[name="expectedIncome"]').addEventListener('input', recalcTotal);
 
+    // Default-allocations template. Semi-monthly halves get separate
+    // templates — rent lands in one half, so their budgets differ.
+    const defaultsWrap = document.createElement('label');
+    defaultsWrap.className = 'budget-field';
+    defaultsWrap.style.cssText = 'flex-direction:row;align-items:center;gap:var(--space-2);';
+    defaultsWrap.innerHTML = `
+      <input type="checkbox" name="saveDefault" style="width:16px;height:16px;">
+      <span style="font-size:var(--fs-sm);font-weight:400;text-transform:none;letter-spacing:0;" id="budget-pp-default-label"></span>
+    `;
+    form.appendChild(defaultsWrap);
+    function refreshDefaultLabel() {
+      const sd = form.querySelector('input[name="startDate"]').value || todayKey();
+      const half = parseInt(sd.slice(8), 10) <= 15 ? '1st–15th' : '16th–end-of-month';
+      form.querySelector('#budget-pp-default-label').textContent =
+        `Save these allocations as the default for every ${half} period — applies to current and upcoming ones that have none, and to all newly generated ones`;
+    }
+    refreshDefaultLabel();
+    form.querySelector('input[name="startDate"]').addEventListener('change', refreshDefaultLabel);
+
     const actions = document.createElement('div');
     actions.className = 'pike-modal-actions';
     actions.innerHTML = `
@@ -2672,6 +2698,8 @@
         }
       });
 
+      const saveDefault = !!fd.get('saveDefault');
+
       global.Pike.state.commit((d) => {
         if (!d.budget.payPeriods) d.budget.payPeriods = [];
         if (isEdit) {
@@ -2691,6 +2719,24 @@
             expectedIncomeCents,
             allocations,
             notes: '',
+          });
+        }
+
+        // Save as the default template for this half of the month, and fill
+        // current/upcoming same-half periods that have no allocations yet.
+        // Hand-edited periods and past periods are never touched.
+        if (saveDefault) {
+          if (!d.budget.settings) d.budget.settings = {};
+          if (!d.budget.settings.defaultAllocations) d.budget.settings.defaultAllocations = {};
+          const half = (sd) => (parseInt(sd.slice(8), 10) <= 15 ? 'firstHalf' : 'secondHalf');
+          const key = half(startDate);
+          d.budget.settings.defaultAllocations[key] = allocations.map((a) => ({ ...a }));
+          const today = todayKey();
+          d.budget.payPeriods.forEach((p) => {
+            if (p.endDate < today) return;
+            if (half(p.startDate) !== key) return;
+            if ((p.allocations || []).length) return;
+            p.allocations = allocations.map((a) => ({ ...a }));
           });
         }
       });
