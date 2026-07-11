@@ -3514,19 +3514,52 @@
     const data = global.Pike.state.data;
     if (!data || !data.budget) return;
 
-    if (!data.budget.categoriesSeeded) {
+    // Seed guard + dedupe. A sync race once planted the seed list three times
+    // (multiple devices each seeded before the categoriesSeeded flag round-
+    // tripped). Two defenses: never seed when ANY categories exist, and
+    // collapse duplicate names back to the first copy, remapping every
+    // reference. Both idempotent — safe to run on every init.
+    const cats = data.budget.categories || [];
+    const dupIds = {};
+    const seenByName = {};
+    cats.forEach((c) => {
+      const key = (c.name || '').toLowerCase();
+      if (seenByName[key]) dupIds[c.id] = seenByName[key];
+      else seenByName[key] = c.id;
+    });
+
+    if (Object.keys(dupIds).length) {
+      global.Pike.state.commit((d) => {
+        const fix = (id) => dupIds[id] || id;
+        (d.budget.transactions || []).forEach((t) => {
+          if (t.categoryId) t.categoryId = fix(t.categoryId);
+          (t.splits || []).forEach((s) => { if (s.categoryId) s.categoryId = fix(s.categoryId); });
+        });
+        (d.budget.payPeriods || []).forEach((p) => {
+          (p.allocations || []).forEach((a) => { if (a.categoryId) a.categoryId = fix(a.categoryId); });
+        });
+        (d.budget.rules || []).forEach((r) => { if (r.categoryId) r.categoryId = fix(r.categoryId); });
+        (d.budget.recurringBills || []).forEach((rb) => { if (rb.categoryId) rb.categoryId = fix(rb.categoryId); });
+        d.budget.categories = d.budget.categories.filter((c) => !dupIds[c.id]);
+        d.budget.categoriesSeeded = true;
+      });
+    } else if (!data.budget.categoriesSeeded) {
       global.Pike.state.commit((d) => {
         if (!d.budget.categories) d.budget.categories = [];
-        SEED_CATEGORIES.forEach((seed) => {
-          d.budget.categories.push({
-            id: uid('cat'),
-            name: seed.name,
-            group: seed.group,
-            color: seed.color,
-            icon: null,
-            archived: false,
+        if (!d.budget.categories.length) {
+          SEED_CATEGORIES.forEach((seed) => {
+            d.budget.categories.push({
+              id: uid('cat'),
+              name: seed.name,
+              group: seed.group,
+              color: seed.color,
+              icon: null,
+              archived: false,
+            });
           });
-        });
+        }
+        // Categories already present (flag was lost in a merge) — just set the
+        // flag; never seed over existing data.
         d.budget.categoriesSeeded = true;
       });
     }
