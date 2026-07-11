@@ -3361,6 +3361,10 @@
           </select>
         </label>
       </div>
+      <label class="budget-field" id="budget-tx-rule-field" style="flex-direction:row;align-items:center;gap:var(--space-2);">
+        <input type="checkbox" name="makeRule" style="width:16px;height:16px;">
+        <span style="font-size:var(--fs-sm);font-weight:400;text-transform:none;letter-spacing:0;">Remember this merchant — auto-categorize future imports with this category</span>
+      </label>
       <button type="button" class="budget-split-toggle" id="budget-tx-split-toggle">Split this transaction</button>
       <label class="budget-field">
         <span>Description (optional)</span>
@@ -3583,6 +3587,22 @@
             plaidTransactionId: null,
             plaidPending: null,
           });
+        }
+
+        // "Remember this merchant" — same rule shape as the bulk
+        // Apply-category flow, so future imports self-categorize.
+        if (fd.get('makeRule') && !splitsOn && categoryId && merchant) {
+          if (!d.budget.rules) d.budget.rules = [];
+          const matchValue = merchant.toLowerCase().trim();
+          const exists = d.budget.rules.some((r) =>
+            r.matchType === 'merchantContains' && r.matchValue === matchValue
+          );
+          if (!exists) {
+            d.budget.rules.push({
+              id: uid('rul'), matchType: 'merchantContains', matchValue,
+              categoryId, priority: 50, enabled: true,
+            });
+          }
         }
       });
       global.Pike.modal.close();
@@ -3829,6 +3849,9 @@
     const active = bills.filter((b) => !b.endDate || b.endDate >= today);
     const ended  = bills.filter((b) => b.endDate && b.endDate < today);
 
+    const summary = buildRecurringSummary(active);
+    if (summary) wrap.appendChild(summary);
+
     active
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -3846,6 +3869,75 @@
         .forEach((bill) => wrap.appendChild(buildRecurringRow(bill)));
     }
     return wrap;
+  }
+
+  // Normalize a bill's amount to a monthly figure for the summary table.
+  function monthlyCentsForBill(bill) {
+    const amt = bill.amountCents || 0;
+    if (bill.cadence === 'weekly')    return Math.round(amt * 52 / 12);
+    if (bill.cadence === 'biweekly')  return Math.round(amt * 26 / 12);
+    if (bill.cadence === 'quarterly') return Math.round(amt / 3);
+    if (bill.cadence === 'annual')    return Math.round(amt / 12);
+    return amt;  // monthly
+  }
+
+  // Monthly recurring load, bucketed: installment plans (bills with an end
+  // date — BNPL) as their own line, everything else by category. All amounts
+  // normalized to per-month so weekly and annual bills compare honestly.
+  function buildRecurringSummary(activeBills) {
+    if (!activeBills.length) return null;
+    const cats = getBudget().categories || [];
+    const buckets = {};
+    activeBills.forEach((bill) => {
+      const key = bill.endDate
+        ? 'Installments (BNPL)'
+        : ((cats.find((c) => c.id === bill.categoryId) || {}).name || 'Uncategorized');
+      if (!buckets[key]) buckets[key] = { count: 0, monthlyCents: 0 };
+      buckets[key].count += 1;
+      buckets[key].monthlyCents += monthlyCentsForBill(bill);
+    });
+    const rows = Object.entries(buckets).sort((a, b2) => b2[1].monthlyCents - a[1].monthlyCents);
+    const totalCents = rows.reduce((s, [, v]) => s + v.monthlyCents, 0);
+
+    const card = document.createElement('section');
+    card.className = 'budget-top-cats';
+
+    const head = document.createElement('div');
+    head.className = 'budget-top-cats-head';
+    const title = document.createElement('h3');
+    title.className = 'budget-top-cats-title';
+    title.textContent = 'Monthly recurring load';
+    head.appendChild(title);
+    const total = document.createElement('span');
+    total.className = 'budget-top-cats-spent';
+    total.textContent = `${formatCents(totalCents)}/mo`;
+    head.appendChild(total);
+    card.appendChild(head);
+
+    const list = document.createElement('div');
+    list.className = 'budget-top-cats-list';
+    rows.forEach(([name, v]) => {
+      const row = document.createElement('div');
+      row.className = 'budget-top-cats-row';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'budget-top-cats-name';
+      nameEl.textContent = name;
+      const right = document.createElement('div');
+      right.className = 'budget-top-cats-right';
+      const amt = document.createElement('span');
+      amt.className = 'budget-top-cats-spent';
+      amt.textContent = `${formatCents(v.monthlyCents)}/mo`;
+      const sub = document.createElement('span');
+      sub.className = 'budget-top-cats-sub';
+      sub.textContent = `${v.count} bill${v.count === 1 ? '' : 's'}`;
+      right.appendChild(amt);
+      right.appendChild(sub);
+      row.appendChild(nameEl);
+      row.appendChild(right);
+      list.appendChild(row);
+    });
+    card.appendChild(list);
+    return card;
   }
 
   function buildRecurringRow(bill) {
