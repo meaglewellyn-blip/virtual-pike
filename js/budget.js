@@ -391,6 +391,91 @@
     return `Naive estimate: ${timeLabel} at ${formatCents(avgMonthly)}/mo · ignores APR`;
   }
 
+  // ── Amortized debt tracking ──────────────────────────────────────────────────
+  // For debts with an APR whose linked account is anchored to a known statement
+  // figure (the account's startingBalance/Date), derive current principal by
+  // amortizing each observed payment since the anchor: simple daily interest
+  // accrues between payments, the remainder of each payment reduces principal.
+  // Payments are observed two ways:
+  //   1. transfer/debt-payment inflow legs on the linked account
+  //   2. outflows anywhere matching the debt's paymentMatchValue — for loans
+  //      whose servicer isn't Plaid-connected (autopay from checking)
+  // Estimates re-true themselves whenever the user re-anchors the account
+  // balance from a fresh statement. Returns null when amortizing isn't possible.
+  function amortizedDebtStatus(dbt) {
+    if (!dbt.aprBps) return null;
+    const b = getBudget();
+    const linked = (b.accounts || []).find((a) => a.id === dbt.accountId);
+    if (!linked || !linked.startingBalanceDate) return null;
+    const matchVal = (dbt.paymentMatchValue || '').toLowerCase().trim();
+
+    const anchorDate = linked.startingBalanceDate;
+    const payments = [];
+    (b.transactions || []).forEach((t) => {
+      if (t.plaidRemoved || !t.date || t.date <= anchorDate) return;
+      const isTransferLeg = t.transferPairId && t.direction === 'inflow' && t.accountId === dbt.accountId;
+      let isMatched = false;
+      if (!isTransferLeg && matchVal && t.direction === 'outflow' && !t.transferPairId) {
+        const m = `${t.merchant || ''} ${t.description || ''}`.toLowerCase();
+        isMatched = m.includes(matchVal);
+      }
+      if (isTransferLeg || isMatched) payments.push(t);
+    });
+    payments.sort((a, b2) => a.date.localeCompare(b2.date));
+
+    const dailyRate = (dbt.aprBps / 10000) / 365;
+    let balance = Math.abs(linked.startingBalanceCents || 0);
+    let prevDate = anchorDate;
+    let interestPaid = 0;
+    let principalPaid = 0;
+    payments.forEach((p) => {
+      const days = Math.max(daysBetween(prevDate, p.date), 0);
+      const interest = Math.round(balance * dailyRate * days);
+      const principal = p.amountCents - interest;
+      interestPaid  += Math.min(interest, p.amountCents);
+      principalPaid += Math.max(principal, 0);
+      balance = Math.max(balance - principal, 0);
+      prevDate = p.date;
+    });
+
+    // Forward projection at the minimum payment. Null when the minimum doesn't
+    // cover interest (never pays off) or no minimum is set.
+    let payoffMonths = null;
+    if (balance > 0 && dbt.minimumPaymentCents > 0) {
+      const monthlyRate = (dbt.aprBps / 10000) / 12;
+      if (dbt.minimumPaymentCents > balance * monthlyRate) {
+        let sim = balance;
+        payoffMonths = 0;
+        while (sim > 0 && payoffMonths < 600) {
+          sim = sim + Math.round(sim * monthlyRate) - dbt.minimumPaymentCents;
+          payoffMonths++;
+        }
+      }
+    }
+
+    return {
+      balance, interestPaid, principalPaid,
+      paymentCount: payments.length,
+      payoffMonths, anchorDate,
+    };
+  }
+
+  function amortProgressLineText(dbt, s) {
+    if (s.balance <= 0) return 'Cleared';
+    if (!s.paymentCount) {
+      return `Amortized at ${(dbt.aprBps / 100).toFixed(2)}% · no payments observed since ${fmtDateShort(s.anchorDate)}`;
+    }
+    let timeLabel = '';
+    if (s.payoffMonths != null) {
+      const years = Math.floor(s.payoffMonths / 12);
+      const rem = s.payoffMonths % 12;
+      if (s.payoffMonths <= 12) timeLabel = `payoff in about ${s.payoffMonths} mo`;
+      else timeLabel = rem === 0 ? `payoff in about ${years} yr` : `payoff in about ${years} yr ${rem} mo`;
+    }
+    const paidBits = `${formatCents(s.principalPaid)} principal · ${formatCents(s.interestPaid)} interest since ${fmtDateShort(s.anchorDate)}`;
+    return [timeLabel, paidBits].filter(Boolean).join(' · ');
+  }
+
   function unassignedTxnCount() {
     const periods = getBudget().payPeriods || [];
     if (!periods.length) return 0;
@@ -1511,8 +1596,10 @@
     main.appendChild(name);
     main.appendChild(meta);
 
-    // Naive debt-progress line. Quiet, intentionally labeled as an estimate.
-    const progressText = debtProgressLineText(dbt);
+    // Progress line: amortized when the debt has APR + an anchored account,
+    // otherwise the quiet naive estimate.
+    const amort = amortizedDebtStatus(dbt);
+    const progressText = amort ? amortProgressLineText(dbt, amort) : debtProgressLineText(dbt);
     if (progressText) {
       const progress = document.createElement('p');
       progress.className = 'budget-debt-progress';
@@ -1524,7 +1611,10 @@
     amountWrap.className = 'budget-row-amount-wrap';
     const amount = document.createElement('div');
     amount.className = 'budget-row-amount';
-    if (linked) {
+    if (amort) {
+      amount.textContent = formatCents(amort.balance);
+      amount.classList.add('is-negative');
+    } else if (linked) {
       const owedCents = Math.abs(accountBalance(linked));
       amount.textContent = formatCents(owedCents);
       amount.classList.add('is-negative');
@@ -1532,7 +1622,12 @@
       amount.textContent = '—';
     }
     amountWrap.appendChild(amount);
-    if (linked) {
+    if (amort) {
+      const stateLine = document.createElement('span');
+      stateLine.className = 'budget-row-amount-state';
+      stateLine.textContent = `amortized est. · anchored ${fmtDateShort(amort.anchorDate)}`;
+      amountWrap.appendChild(stateLine);
+    } else if (linked) {
       const stateLine = document.createElement('span');
       stateLine.className = 'budget-row-amount-state';
       stateLine.textContent = accountBalanceState(linked);
@@ -1622,6 +1717,12 @@
                value="${esc(dbt.targetPayoffDate || '')}">
       </label>
       <label class="budget-field">
+        <span>Payment match (optional)</span>
+        <input type="text" class="input" name="paymentMatchValue"
+               value="${esc(dbt.paymentMatchValue || '')}" placeholder="e.g. launch servicing">
+        <span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:400;">Text that identifies this loan's payments in imported transactions. With an APR, enables the amortized balance — interest vs principal — for servicers that aren't bank-connected.</span>
+      </label>
+      <label class="budget-field">
         <span>Notes (optional)</span>
         <textarea class="input" name="notes" rows="2" placeholder="Anything to remember about this debt…">${esc(dbt.notes || '')}</textarea>
       </label>
@@ -1641,6 +1742,7 @@
       const aprBps = aprRaw === '' ? 0 : Math.round(Number(aprRaw.replace(/[^\d.\-]/g, '')) * 100);
       const minimumPaymentCents = centsFromInput(String(fd.get('minimumPayment') || '0'));
       const targetPayoffDate = String(fd.get('targetPayoffDate') || '').trim() || null;
+      const paymentMatchValue = String(fd.get('paymentMatchValue') || '').trim().toLowerCase() || null;
       const notes = String(fd.get('notes') || '').trim();
 
       global.Pike.state.commit((d) => {
@@ -1652,6 +1754,7 @@
             x.aprBps = aprBps;
             x.minimumPaymentCents = minimumPaymentCents;
             x.targetPayoffDate = targetPayoffDate;
+            x.paymentMatchValue = paymentMatchValue;
             x.notes = notes;
           }
         } else {
@@ -1660,6 +1763,7 @@
             accountId, kind, aprBps,
             minimumPaymentCents,
             targetPayoffDate,
+            paymentMatchValue,
             notes,
           });
         }
