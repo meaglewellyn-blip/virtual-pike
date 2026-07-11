@@ -615,7 +615,9 @@
       if (Math.abs(daysBetween(occDate, t.date)) > 4) return false;
       if (t.recurringBillId === bill.id) return true;
       if (!matchVal) return false;
-      if (Math.abs((t.amountCents || 0) - (bill.amountCents || 0)) > tolerance) return false;
+      // Variable-amount bills (utilities, card minimums) skip the amount
+      // check — the merchant match plus the tight date window carries it.
+      if (!bill.variable && Math.abs((t.amountCents || 0) - (bill.amountCents || 0)) > tolerance) return false;
       const m = `${t.merchant || ''} ${t.description || ''}`.toLowerCase();
       return m.includes(matchVal);
     }) || null;
@@ -904,10 +906,13 @@
     card.appendChild(labelRow);
 
     const headline = document.createElement('p');
-    headline.className = 'budget-pp-headline';
+    headline.className = 'budget-pp-headline is-link';
+    headline.title = 'View these transactions';
     headline.textContent = spent < 0
       ? `${formatCents(Math.abs(spent))} net credit`
       : `${formatCents(spent)} spent`;
+    const headlineScope = String(period.id).startsWith('month:') ? period.id : 'period:' + period.id;
+    headline.addEventListener('click', () => gotoTransactionsFiltered(null, headlineScope));
     card.appendChild(headline);
 
     // Status in plain words — never a bare unexplained number. This is the
@@ -2357,6 +2362,7 @@
         allocatedCents: alloc.amountCents,
         spentCents: categorySpentInPeriod(cat.id, period),
         unallocated: false,
+        period,
       }));
     });
 
@@ -2387,6 +2393,7 @@
           allocatedCents: 0,
           spentCents: categorySpentInPeriod(catId, period),
           unallocated: true,
+          period,
         }));
       });
     }
@@ -2395,9 +2402,14 @@
     return wrap;
   }
 
-  function buildCategoryBreakdownRow({ cat, allocatedCents, spentCents, unallocated }) {
+  function buildCategoryBreakdownRow({ cat, allocatedCents, spentCents, unallocated, period }) {
     const row = document.createElement('div');
     row.className = 'budget-cat-row' + (unallocated ? ' is-unallocated' : '');
+    if (period && period.id) {
+      row.classList.add('is-clickable');
+      row.title = `View ${cat.name} transactions`;
+      row.addEventListener('click', () => gotoTransactionsFiltered(cat.id, 'period:' + period.id));
+    }
 
     const head = document.createElement('div');
     head.className = 'budget-cat-row-head';
@@ -2773,10 +2785,11 @@
     ));
 
     selects.appendChild(mkSelect([
-      ['date-desc',   'Newest first'],
-      ['date-asc',    'Oldest first'],
-      ['amount-desc', 'Largest first'],
-      ['amount-asc',  'Smallest first'],
+      ['date-desc',    'Newest first'],
+      ['date-asc',     'Oldest first'],
+      ['amount-desc',  'Largest first'],
+      ['amount-asc',   'Smallest first'],
+      ['merchant-asc', 'By merchant'],
     ], txSort, (v) => { txSort = v; }, 'Sort order'));
 
     if (txAccountFilter || txCategoryFilter || txScopeFilter) {
@@ -2866,6 +2879,13 @@
     visible.sort((a, b2) => {
       if (txSort === 'amount-desc') return (b2.amountCents || 0) - (a.amountCents || 0);
       if (txSort === 'amount-asc')  return (a.amountCents || 0) - (b2.amountCents || 0);
+      if (txSort === 'merchant-asc') {
+        const ma = (a.merchant || a.description || '').toLowerCase();
+        const mb = (b2.merchant || b2.description || '').toLowerCase();
+        const cmpM = ma.localeCompare(mb);
+        if (cmpM !== 0) return cmpM;
+        return b2.date.localeCompare(a.date);
+      }
       const cmp = txSort === 'date-asc'
         ? a.date.localeCompare(b2.date)
         : b2.date.localeCompare(a.date);
@@ -3355,6 +3375,7 @@
         <label class="budget-field" id="budget-tx-category-field">
           <span>Category</span>
           <select class="input" name="categoryId">
+            <option value="" ${!(isEdit ? tx.categoryId : presets.categoryId) ? 'selected' : ''}>(no category)</option>
             ${initialCategories.map((c) =>
               `<option value="${esc(c.id)}" ${(isEdit ? tx.categoryId : presets.categoryId) === c.id ? 'selected' : ''}>${esc(c.name)}</option>`
             ).join('')}
@@ -3442,7 +3463,9 @@
     function refreshCategoryDropdown(selectedId) {
       const opts = currentCategoriesForUI();
       const sel = categoryField.querySelector('select');
-      sel.innerHTML = opts.map((c) =>
+      // Always offer "(no category)" — without it the browser silently picks
+      // the first category, which stamped Groceries on uncategorized saves.
+      sel.innerHTML = `<option value="" ${!selectedId ? 'selected' : ''}>(no category)</option>` + opts.map((c) =>
         `<option value="${esc(c.id)}" ${selectedId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`
       ).join('');
     }
@@ -3501,12 +3524,15 @@
     kindSelect.addEventListener('change', () => {
       // Update category dropdown to match kind's allowable categories.
       refreshCategoryDropdown(null);
-      // Reset all split categories to first available (group of categories changed).
+      // Rebuild split selects for the new kind, preserving each row's choice
+      // when the category still applies (a silent reset stamped everything
+      // back to the first option).
       splitListEl.querySelectorAll('.budget-allocation-row').forEach((r) => {
         const sel = r.querySelector('select[name="splitCategory"]');
+        const prev = sel.value;
         const opts = currentCategoriesForUI();
         sel.innerHTML = opts.map((c) =>
-          `<option value="${esc(c.id)}">${esc(c.name)}</option>`
+          `<option value="${esc(c.id)}" ${c.id === prev ? 'selected' : ''}>${esc(c.name)}</option>`
         ).join('');
       });
     });
@@ -3985,7 +4011,7 @@
     amountWrap.appendChild(amount);
     const sub = document.createElement('span');
     sub.className = 'budget-row-amount-state';
-    sub.textContent = isEnded ? 'Completed' : 'Expected';
+    sub.textContent = isEnded ? 'Completed' : (bill.variable ? 'Varies' : 'Expected');
     amountWrap.appendChild(sub);
 
     const actions = document.createElement('div');
@@ -4097,6 +4123,10 @@
         <input type="text" class="input" name="matchValue" value="${esc(bill.matchValue || '')}" placeholder="e.g. netflix">
         <span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:400;">Merchant text that identifies this bill's payments in imported transactions — lets upcoming bills check themselves off when the payment lands.</span>
       </label>
+      <label class="budget-field" style="flex-direction:row;align-items:center;gap:var(--space-2);">
+        <input type="checkbox" name="variable" ${bill.variable ? 'checked' : ''} style="width:16px;height:16px;">
+        <span style="font-size:var(--fs-sm);font-weight:400;text-transform:none;letter-spacing:0;">Amount varies (utilities, card minimums) — match payments by merchant and date only</span>
+      </label>
       <label class="budget-field">
         <span>Notes (optional)</span>
         <textarea class="input" name="notes" rows="2">${esc(bill.notes || '')}</textarea>
@@ -4142,6 +4172,7 @@
       const anchorDate = String(fd.get('anchorDate') || todayKey());
       const endDate = String(fd.get('endDate') || '').trim() || null;
       const matchValue = String(fd.get('matchValue') || '').trim().toLowerCase() || null;
+      const variable = !!fd.get('variable');
       const notes = String(fd.get('notes') || '').trim();
 
       global.Pike.state.commit((d) => {
@@ -4153,13 +4184,13 @@
             b.accountId = accountId; b.counterAccountId = counterAccountId;
             b.categoryId = categoryId; b.cadence = cadence;
             b.anchorDate = anchorDate; b.endDate = endDate;
-            b.matchValue = matchValue; b.notes = notes;
+            b.matchValue = matchValue; b.variable = variable; b.notes = notes;
           }
         } else {
           d.budget.recurringBills.push({
             id: uid('rec'), name, amountCents,
             categoryId, accountId, counterAccountId,
-            cadence, anchorDate, endDate, matchValue,
+            cadence, anchorDate, endDate, matchValue, variable,
             autopay: false, notes, archived: false,
           });
         }

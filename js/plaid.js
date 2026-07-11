@@ -615,14 +615,17 @@
   // or null if none match. Never applied to already-categorized transactions.
   function matchRule(merchant, description, rules) {
     const norm = (s) => (s || '').toLowerCase().trim();
-    const m = norm(merchant || description);
-    if (!m) return null;
+    const m = norm(merchant);
+    const dsc = norm(description);
+    if (!m && !dsc) return null;
     const active = rules.filter((r) => r.enabled).sort((a, b) => (b.priority || 0) - (a.priority || 0));
     for (const r of active) {
       const v = norm(r.matchValue || '');
       if (!v) continue;
-      if (r.matchType === 'merchantContains' && m.includes(v)) return r;
-      if (r.matchType === 'merchantEquals'   && m === v)         return r;
+      // Contains checks BOTH fields — Plaid sometimes assigns a junk merchant
+      // ("2 O") while the description carries the real name (DOORDASH*...).
+      if (r.matchType === 'merchantContains' && (m.includes(v) || dsc.includes(v))) return r;
+      if (r.matchType === 'merchantEquals'   && m === v) return r;
     }
     return null;
   }

@@ -1351,3 +1351,21 @@
 .budget-upcoming-due.is-paid {
   color: var(--success, #7d9471);
 }
+
+/* ── Drill-down affordances ────────────────────────────────────────────────── */
+
+.budget-pp-headline.is-link {
+  cursor: pointer;
+}
+
+.budget-pp-headline.is-link:hover {
+  color: var(--accent-strong);
+}
+
+.budget-cat-row.is-clickable {
+  cursor: pointer;
+}
+
+.budget-cat-row.is-clickable:hover .budget-cat-name {
+  color: var(--accent-strong);
+}
