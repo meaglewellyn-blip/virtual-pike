@@ -520,6 +520,10 @@
     const unassigned = unassignedTxnCount();
     if (unassigned > 0) wrap.appendChild(buildUnassignedBanner(unassigned));
 
+    // Possible imported transfer/payment pairs (only if any)
+    const matchCount = findTransferCandidates().length;
+    if (matchCount > 0) wrap.appendChild(buildTransferMatchBanner(matchCount));
+
     return wrap;
   }
 
@@ -864,6 +868,170 @@
     return b;
   }
 
+  // ─── Transfer / card-payment matcher ─────────────────────────────────────────
+  // Imports capture both sides of one money movement as separate transactions:
+  // an Amex payment arrives as a checking outflow AND a card-side credit. Left
+  // as-is they inflate spending and income. This finds likely pairs — equal
+  // amounts, opposite directions, different accounts, within 3 days — and lets
+  // the user link them into a proper transfer/debt-payment pair. Suggestion
+  // only; linking is always an explicit user action.
+
+  function transferSuggestKey(outId, inId) { return `${outId}|${inId}`; }
+
+  function findTransferCandidates() {
+    const b = getBudget();
+    if (!b) return [];
+    const dismissed = new Set(b.dismissedTransferSuggestions || []);
+    const eligible = (b.transactions || []).filter((t) =>
+      !t.plaidRemoved &&
+      !t.transferPairId &&
+      t.plaidTransactionId &&  // imported only — manual entries are intentional
+      (t.kind === 'spending' || t.kind === 'income')
+    );
+    const inflows = eligible.filter((t) => t.direction === 'inflow');
+    const used = new Set();
+    const pairs = [];
+    eligible.filter((t) => t.direction === 'outflow').forEach((out) => {
+      let best = null;
+      let bestGap = Infinity;
+      inflows.forEach((inn) => {
+        if (used.has(inn.id) || inn.accountId === out.accountId) return;
+        if (inn.amountCents !== out.amountCents) return;
+        if (dismissed.has(transferSuggestKey(out.id, inn.id))) return;
+        const gap = Math.abs(daysBetween(out.date, inn.date));
+        if (gap > 3 || gap >= bestGap) return;
+        best = inn; bestGap = gap;
+      });
+      if (best) { used.add(best.id); pairs.push({ out, inn: best }); }
+    });
+    return pairs;
+  }
+
+  function linkAsTransferPair(outId, inId) {
+    global.Pike.state.commit((d) => {
+      const txns = d.budget.transactions || [];
+      const out = txns.find((t) => t.id === outId);
+      const inn = txns.find((t) => t.id === inId);
+      if (!out || !inn) return;
+      const destType = ((d.budget.accounts || []).find((a) => a.id === inn.accountId) || {}).type;
+      const kind = DEBT_ACCOUNT_TYPES.includes(destType) ? 'debt-payment' : 'transfer';
+      const now = new Date().toISOString();
+      [out, inn].forEach((t) => {
+        t.kind = kind;
+        t.transferPairId = out.id;  // convention: pair id = outflow leg id
+        t.categoryId = null;
+        t.splits = null;
+        t.updatedAt = now;
+      });
+    });
+  }
+
+  function dismissTransferSuggestion(outId, inId) {
+    global.Pike.state.commit((d) => {
+      if (!d.budget.dismissedTransferSuggestions) d.budget.dismissedTransferSuggestions = [];
+      d.budget.dismissedTransferSuggestions.push(transferSuggestKey(outId, inId));
+    });
+  }
+
+  function openTransferMatchModal() {
+    const body = document.createElement('div');
+    body.style.display = 'flex';
+    body.style.flexDirection = 'column';
+    body.style.gap = 'var(--space-3)';
+
+    function renderList() {
+      body.innerHTML = '';
+      const b = getBudget();
+      const accountName = (id) => {
+        const a = (b.accounts || []).find((x) => x.id === id);
+        return a ? a.name : 'Unknown account';
+      };
+      const pairs = findTransferCandidates();
+
+      if (!pairs.length) {
+        const done = document.createElement('p');
+        done.style.fontSize = 'var(--fs-sm)';
+        done.style.color = 'var(--text-muted)';
+        done.style.margin = '0';
+        done.textContent = 'No more likely matches. New imports are re-checked automatically.';
+        body.appendChild(done);
+        return;
+      }
+
+      const desc = document.createElement('p');
+      desc.style.fontSize = 'var(--fs-sm)';
+      desc.style.color = 'var(--text-muted)';
+      desc.style.margin = '0';
+      desc.textContent = 'These imported pairs look like two sides of one movement. Linking excludes them from spending and counts card payments as debt paid.';
+      body.appendChild(desc);
+
+      pairs.forEach(({ out, inn }) => {
+        const destType = ((b.accounts || []).find((a) => a.id === inn.accountId) || {}).type;
+        const isPayment = DEBT_ACCOUNT_TYPES.includes(destType);
+
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.flexDirection = 'column';
+        row.style.gap = 'var(--space-2)';
+        row.style.padding = 'var(--space-3) 0';
+        row.style.borderTop = '1px dashed var(--line-soft)';
+
+        const line = document.createElement('div');
+        line.style.fontSize = 'var(--fs-sm)';
+        line.textContent = `${fmtDateShort(out.date)} · ${formatCents(out.amountCents)} — ${accountName(out.accountId)} → ${accountName(inn.accountId)}`;
+        row.appendChild(line);
+
+        const sub = document.createElement('div');
+        sub.style.fontSize = 'var(--fs-xs)';
+        sub.style.color = 'var(--text-faint)';
+        sub.textContent = `${out.merchant || out.description || 'No description'} · ${inn.merchant || inn.description || 'No description'}`;
+        row.appendChild(sub);
+
+        const btns = document.createElement('div');
+        btns.style.display = 'flex';
+        btns.style.gap = 'var(--space-2)';
+
+        const linkBtn = document.createElement('button');
+        linkBtn.type = 'button';
+        linkBtn.className = 'btn btn-primary btn-sm';
+        linkBtn.textContent = isPayment ? 'Link as card payment' : 'Link as transfer';
+        linkBtn.addEventListener('click', () => { linkAsTransferPair(out.id, inn.id); renderList(); });
+
+        const skipBtn = document.createElement('button');
+        skipBtn.type = 'button';
+        skipBtn.className = 'btn btn-ghost btn-sm';
+        skipBtn.textContent = 'Not a match';
+        skipBtn.addEventListener('click', () => { dismissTransferSuggestion(out.id, inn.id); renderList(); });
+
+        btns.appendChild(linkBtn);
+        btns.appendChild(skipBtn);
+        row.appendChild(btns);
+        body.appendChild(row);
+      });
+    }
+
+    renderList();
+    global.Pike.modal.open({ title: 'Possible transfers & card payments', body });
+  }
+
+  function buildTransferMatchBanner(count) {
+    const b = document.createElement('div');
+    b.className = 'budget-banner budget-banner-matches';
+    const text = document.createElement('p');
+    text.className = 'budget-banner-text';
+    text.textContent = count === 1
+      ? '1 imported pair looks like a transfer or card payment.'
+      : `${count} imported pairs look like transfers or card payments.`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-ghost btn-sm';
+    btn.textContent = 'Review';
+    btn.addEventListener('click', openTransferMatchModal);
+    b.appendChild(text);
+    b.appendChild(btn);
+    return b;
+  }
+
   // ─── Focused view dispatch ───────────────────────────────────────────────────
 
   function buildFocusedView(viewId) {
@@ -986,34 +1154,97 @@
     return results;
   }
 
-  function openGeneratePeriodsModal() {
-    const b = getBudget();
-    const existing = b.payPeriods || [];
-    const txns = b.transactions || [];
+  // Fallbacks when budget.settings doesn't override them. Income merchants are
+  // matched case-insensitively against merchant + description — "gusto" catches
+  // every Gusto payroll deposit, on-cycle or off-cycle.
+  const DEFAULT_EXPECTED_INCOME_CENTS = 381100;
+  const DEFAULT_INCOME_MERCHANTS = ['gusto'];
 
-    // Start from earliest transaction or existing period, whichever is earlier.
+  function semimonthlyLabel(startDate, endDate) {
+    const day = parseInt(startDate.slice(8));
+    const monthName = new Date(startDate + 'T12:00:00').toLocaleString('en-US', { month: 'short' });
+    return day === 1 ? `${monthName} 1–15` : `${monthName} 16–${parseInt(endDate.slice(8))}`;
+  }
+
+  // Actual payroll income landing inside [startDate, endDate]: inflows to
+  // checking/savings accounts whose merchant or description matches an income
+  // merchant. Deliberately NOT all kind==='income' — imports classify every
+  // inflow as income, including card-side payment credits and refunds.
+  function payrollIncomeInRange(b, startDate, endDate) {
+    const merchants = (b.settings && b.settings.incomeMerchants) || DEFAULT_INCOME_MERCHANTS;
+    const depositAccounts = new Set(
+      (b.accounts || [])
+        .filter((a) => a.type === 'checking' || a.type === 'savings')
+        .map((a) => a.id)
+    );
+    return (b.transactions || []).reduce((sum, t) => {
+      if (t.plaidRemoved || t.direction !== 'inflow') return sum;
+      if (!depositAccounts.has(t.accountId)) return sum;
+      if (t.date < startDate || t.date > endDate) return sum;
+      const text = `${t.merchant || ''} ${t.description || ''}`.toLowerCase();
+      return merchants.some((m) => text.includes(m)) ? sum + t.amountCents : sum;
+    }, 0);
+  }
+
+  // Missing semi-monthly periods from the earliest transaction/period through
+  // 2 months ahead. Closed periods get expected income backfilled from actual
+  // payroll deposits; current and future periods get the default — their
+  // paycheck usually hasn't landed yet (Gusto pays at period end).
+  function computeMissingPeriods(b) {
+    const existing = b.payPeriods || [];
+    const txns = (b.transactions || []).filter((t) => !t.plaidRemoved);
     const allStarts = [
       ...existing.map((p) => p.startDate),
       ...txns.map((t) => t.date),
     ].filter(Boolean).sort();
     const earliest = allStarts[0] || todayKey();
-    const fromYYYYMM = earliest.slice(0, 7);
 
-    // Generate through 2 months from today.
     const today = todayKey();
     const toDate = new Date(today);
     toDate.setMonth(toDate.getMonth() + 2);
     const toYYYYMM = toDate.toISOString().slice(0, 7);
 
-    const candidates = semimonthlyPeriodsInRange(fromYYYYMM, toYYYYMM);
+    const candidates = semimonthlyPeriodsInRange(earliest.slice(0, 7), toYYYYMM);
+    const defaultIncome = (b.settings && b.settings.defaultExpectedIncomeCents) || DEFAULT_EXPECTED_INCOME_CENTS;
 
-    // Filter out any that overlap an existing period.
-    const toCreate = candidates.filter((c) =>
-      !existing.some((p) => c.startDate <= p.endDate && c.endDate >= p.startDate)
-    );
+    return candidates
+      .filter((c) => !existing.some((p) => c.startDate <= p.endDate && c.endDate >= p.startDate))
+      .map((c) => ({
+        startDate: c.startDate,
+        endDate:   c.endDate,
+        expectedIncomeCents: c.endDate < today
+          ? payrollIncomeInRange(b, c.startDate, c.endDate)
+          : defaultIncome,
+      }));
+  }
 
-    const fromLabel = fmtDateShort(candidates[0].startDate);
-    const toLabel   = fmtDateShort(candidates[candidates.length - 1].endDate);
+  // Creates any missing periods on a draft state. Called inside the Plaid
+  // import commit (via Pike.budget.ensurePayPeriods) so periods exist the
+  // moment imported transactions land — and from the Generate modal below.
+  // Existing periods are never modified. Returns the number created.
+  function ensurePayPeriods(d) {
+    if (!d.budget) return 0;
+    const toCreate = computeMissingPeriods(d.budget);
+    if (!toCreate.length) return 0;
+    if (!d.budget.payPeriods) d.budget.payPeriods = [];
+    toCreate.forEach((c) => {
+      d.budget.payPeriods.push({
+        id:                  uid('pp'),
+        label:               semimonthlyLabel(c.startDate, c.endDate),
+        startDate:           c.startDate,
+        endDate:             c.endDate,
+        expectedIncomeCents: c.expectedIncomeCents,
+        allocations:         [],
+        notes:               '',
+      });
+    });
+    d.budget.payPeriods.sort((a, b) => a.startDate.localeCompare(b.startDate));
+    return toCreate.length;
+  }
+
+  function openGeneratePeriodsModal() {
+    const b = getBudget();
+    const toCreate = computeMissingPeriods(b);
 
     const body = document.createElement('div');
     body.style.display = 'flex';
@@ -1028,11 +1259,14 @@
     if (!toCreate.length) {
       desc.textContent = 'All semi-monthly periods in this range already exist. Nothing to generate.';
       body.appendChild(desc);
-      Pike.modal.open('Generate pay periods', body);
+      global.Pike.modal.open({ title: 'Generate pay periods', body });
       return;
     }
 
-    desc.textContent = `This will create ${toCreate.length} semi-monthly periods (1st–15th and 16th–last day) from ${fromLabel} through ${toLabel}, skipping any that already exist.`;
+    const fromLabel = fmtDateShort(toCreate[0].startDate);
+    const toLabel   = fmtDateShort(toCreate[toCreate.length - 1].endDate);
+    const defaultIncome = (b.settings && b.settings.defaultExpectedIncomeCents) || DEFAULT_EXPECTED_INCOME_CENTS;
+    desc.textContent = `This will create ${toCreate.length} semi-monthly periods (1st–15th and 16th–last day) from ${fromLabel} through ${toLabel}, skipping any that already exist. Past periods get expected income from the payroll deposits found in them; current and future periods start at ${formatCents(defaultIncome)}.`;
     body.appendChild(desc);
 
     const confirmBtn = document.createElement('button');
@@ -1040,30 +1274,12 @@
     confirmBtn.className = 'btn btn-primary btn-sm';
     confirmBtn.textContent = `Create ${toCreate.length} periods`;
     confirmBtn.addEventListener('click', () => {
-      Pike.state.commit((d) => {
-        if (!d.budget.payPeriods) d.budget.payPeriods = [];
-        toCreate.forEach((c) => {
-          const mm = c.startDate.slice(5, 7);
-          const day = parseInt(c.startDate.slice(8));
-          const monthName = new Date(c.startDate + 'T12:00:00').toLocaleString('en-US', { month: 'short' });
-          const half = day === 1 ? `${monthName} 1–15` : `${monthName} 16–${parseInt(c.endDate.slice(8))}`;
-          d.budget.payPeriods.push({
-            id:                   'pp_' + Math.random().toString(36).slice(2, 9),
-            label:                half,
-            startDate:            c.startDate,
-            endDate:              c.endDate,
-            expectedIncomeCents:  0,
-            allocations:          [],
-            notes:                '',
-          });
-        });
-        d.budget.payPeriods.sort((a, b) => a.startDate.localeCompare(b.startDate));
-      });
-      Pike.modal.close();
+      global.Pike.state.commit((d) => { ensurePayPeriods(d); });
+      global.Pike.modal.close();
     });
     body.appendChild(confirmBtn);
 
-    Pike.modal.open('Generate pay periods', body);
+    global.Pike.modal.open({ title: 'Generate pay periods', body });
   }
 
   function buildEmpty(text) {
@@ -3329,6 +3545,6 @@
   }
 
   global.Pike = global.Pike || {};
-  global.Pike.budget = { init, render };
+  global.Pike.budget = { init, render, ensurePayPeriods };
 
 })(window);

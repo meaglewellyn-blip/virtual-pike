@@ -677,6 +677,14 @@
         d.budget.transactions[idx].plaidRemoved = true;
         d.budget.transactions[idx].updatedAt    = now;
       });
+
+      // ── Auto-create missing pay periods ─────────────────────────────────────
+      // Same commit, so periods exist the moment the transactions do. Closed
+      // periods get actual payroll income backfilled; current and future
+      // periods get the default. Existing periods are never touched.
+      if (Pike.budget && Pike.budget.ensurePayPeriods) {
+        Pike.budget.ensurePayPeriods(d);
+      }
     });
 
     // Advance the cursor only after a successful commit.
