@@ -493,39 +493,65 @@
     return 'Through ' + fmtDateShort(latest);
   }
 
+  // Every occurrence is computed FROM the anchor (anchor + k steps), never by
+  // stepping the previous occurrence. Iterative month-stepping drifts on
+  // month-end anchors: Jan 29 + 1 month overflows to Mar 1, and the plan
+  // loses its day-of-month forever. Clamping against the anchor keeps a
+  // 29th-anchored bill on the 29th (28th in February only).
+  const CADENCE_MONTHS = { monthly: 1, quarterly: 3, annual: 12 };
+
+  function addMonthsClamped(iso, months) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const t = new Date(y, m - 1 + months, 1);
+    const lastDay = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
+    return `${t.getFullYear()}-${pad2(t.getMonth() + 1)}-${pad2(Math.min(d, lastDay))}`;
+  }
+
+  function occurrenceDate(bill, k) {
+    const months = CADENCE_MONTHS[bill.cadence];
+    if (months) return addMonthsClamped(bill.anchorDate, k * months);
+    const cad = RECURRING_CADENCES.find((c) => c.id === bill.cadence);
+    return addDaysIso(bill.anchorDate, k * ((cad && cad.days) || 30));
+  }
+
   // Walks a recurring bill's cadence forward from anchorDate, returning the
   // next occurrence dates in [today, today + days] (inclusive both ends).
   function upcomingOccurrences(bill, daysAhead) {
     const today = todayKey();
     const horizonDate = addDaysIso(today, daysAhead);
-    const cadence = (RECURRING_CADENCES.find((c) => c.id === bill.cadence) || {});
     const out = [];
     if (!bill.anchorDate) return out;
 
+    let k = 0;
     let cursor = bill.anchorDate;
-    // Fast-forward cursor to today minus a full cycle (avoid walking from years ago)
-    const safetyCap = 1000;
-    let i = 0;
-    while (cursor < today && i < safetyCap) {
-      cursor = stepCadence(cursor, bill.cadence);
-      i++;
-    }
-    // Walk forward inside the window
+    while (cursor < today && k < 1000) { k++; cursor = occurrenceDate(bill, k); }
+    // Bills with an endDate (installment plans) yield nothing past it —
+    // they fall off upcoming lists on their own.
     while (cursor <= horizonDate && out.length < 50) {
+      if (bill.endDate && cursor > bill.endDate) break;
       if (cursor >= today) out.push(cursor);
-      cursor = stepCadence(cursor, bill.cadence);
+      k++;
+      cursor = occurrenceDate(bill, k);
     }
     return out;
   }
 
-  function stepCadence(iso, cadenceId) {
-    const cad = RECURRING_CADENCES.find((c) => c.id === cadenceId);
-    if (!cad) return addMonthsIso(iso, 1);
-    if (cad.days) return addDaysIso(iso, cad.days);
-    if (cadenceId === 'monthly')   return addMonthsIso(iso, 1);
-    if (cadenceId === 'quarterly') return addMonthsIso(iso, 3);
-    if (cadenceId === 'annual')    return addMonthsIso(iso, 12);
-    return addMonthsIso(iso, 1);
+  // How many occurrences remain from today through endDate (inclusive).
+  // Null when the bill has no end date (open-ended).
+  function remainingOccurrenceCount(bill) {
+    if (!bill.endDate || !bill.anchorDate) return null;
+    const today = todayKey();
+    if (bill.endDate < today) return 0;
+    let k = 0;
+    let cursor = bill.anchorDate;
+    while (cursor < today && k < 1000) { k++; cursor = occurrenceDate(bill, k); }
+    let count = 0;
+    while (cursor <= bill.endDate && count < 500) {
+      count++;
+      k++;
+      cursor = occurrenceDate(bill, k);
+    }
+    return count;
   }
 
   // For "Log now" duplicate warning — flexible match by merchant + date + account.
@@ -3409,10 +3435,30 @@
       wrap.appendChild(buildEmpty('No recurring bills yet. Tap + Recurring bill to set one up.'));
       return wrap;
     }
-    bills
+
+    // Installment plans whose end date has passed drop to a quiet section at
+    // the bottom — they fell off upcoming lists automatically; archiving them
+    // is optional housekeeping.
+    const today = todayKey();
+    const active = bills.filter((b) => !b.endDate || b.endDate >= today);
+    const ended  = bills.filter((b) => b.endDate && b.endDate < today);
+
+    active
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name))
       .forEach((bill) => wrap.appendChild(buildRecurringRow(bill)));
+
+    if (ended.length) {
+      const head = document.createElement('p');
+      head.className = 'budget-eyebrow';
+      head.style.marginTop = 'var(--space-5)';
+      head.textContent = 'Completed plans';
+      wrap.appendChild(head);
+      ended
+        .slice()
+        .sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''))
+        .forEach((bill) => wrap.appendChild(buildRecurringRow(bill)));
+    }
     return wrap;
   }
 
@@ -3432,10 +3478,24 @@
     name.textContent = bill.name;
     const meta = document.createElement('p');
     meta.className = 'budget-row-meta';
-    const next = upcomingOccurrences(bill, 365)[0];
-    const nextLabel = next ? `next ${fmtDateShort(next)}` : 'no upcoming dates';
+    const isEnded = bill.endDate && bill.endDate < todayKey();
+    const next = isEnded ? null : upcomingOccurrences(bill, 365)[0];
     const route = counter ? `${fromAcct?.name || '—'} → ${counter.name}` : (fromAcct?.name || '—');
-    meta.textContent = `${cadenceLabel} · ${nextLabel} · ${route}`;
+    // Show the year on end dates outside the current year — "ends Jun 29"
+    // would read as earlier than "next Jul 29" when it's really next year.
+    const fmtEnd = (iso) => iso.slice(0, 4) === todayKey().slice(0, 4) ? fmtDateShort(iso) : fmtDate(iso);
+    const bits = [cadenceLabel];
+    if (isEnded) {
+      bits.push(`ended ${fmtEnd(bill.endDate)}`);
+    } else {
+      bits.push(next ? `next ${fmtDateShort(next)}` : 'no upcoming dates');
+      if (bill.endDate) {
+        const left = remainingOccurrenceCount(bill);
+        bits.push(`ends ${fmtEnd(bill.endDate)}${left != null ? ` · ${left} left` : ''}`);
+      }
+    }
+    bits.push(route);
+    meta.textContent = bits.join(' · ');
     main.appendChild(name);
     main.appendChild(meta);
 
@@ -3447,7 +3507,7 @@
     amountWrap.appendChild(amount);
     const sub = document.createElement('span');
     sub.className = 'budget-row-amount-state';
-    sub.textContent = 'Expected';
+    sub.textContent = isEnded ? 'Completed' : 'Expected';
     amountWrap.appendChild(sub);
 
     const actions = document.createElement('div');
@@ -3550,6 +3610,11 @@
         </label>
       </div>
       <label class="budget-field">
+        <span>End date (optional — for installment plans)</span>
+        <input type="date" class="input" name="endDate" value="${esc(bill.endDate || '')}">
+        <span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:400;">The last payment date. After it passes, the bill falls off upcoming lists automatically — made for BNPL plans like Affirm and Klarna.</span>
+      </label>
+      <label class="budget-field">
         <span>Notes (optional)</span>
         <textarea class="input" name="notes" rows="2">${esc(bill.notes || '')}</textarea>
       </label>
@@ -3592,6 +3657,7 @@
       const categoryId = String(fd.get('categoryId') || '') || null;
       const cadence = String(fd.get('cadence') || 'monthly');
       const anchorDate = String(fd.get('anchorDate') || todayKey());
+      const endDate = String(fd.get('endDate') || '').trim() || null;
       const notes = String(fd.get('notes') || '').trim();
 
       global.Pike.state.commit((d) => {
@@ -3602,13 +3668,13 @@
             b.name = name; b.amountCents = amountCents;
             b.accountId = accountId; b.counterAccountId = counterAccountId;
             b.categoryId = categoryId; b.cadence = cadence;
-            b.anchorDate = anchorDate; b.notes = notes;
+            b.anchorDate = anchorDate; b.endDate = endDate; b.notes = notes;
           }
         } else {
           d.budget.recurringBills.push({
             id: uid('rec'), name, amountCents,
             categoryId, accountId, counterAccountId,
-            cadence, anchorDate,
+            cadence, anchorDate, endDate,
             autopay: false, notes, archived: false,
           });
         }
