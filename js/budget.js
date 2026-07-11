@@ -103,6 +103,17 @@
   // null = dashboard; otherwise the id of a focused view
   let activeView = null;
   let txFilter = 'all';  // 'all' | 'unassigned' | 'uncategorized'
+  let txAccountFilter  = '';           // accountId or '' (all)
+  let txCategoryFilter = '';           // categoryId, 'none', or '' (all)
+  let txScopeFilter    = '';           // '', 'period:<id>', 'month:YYYY-MM'
+  let txSort           = 'date-desc';  // 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'
+  // Dashboard scope — period or calendar month. Device-local preference, not
+  // synced state; semi-monthly periods tile months exactly so both views are
+  // pure date math over the same transactions.
+  let dashScope = (() => {
+    try { return localStorage.getItem('pike.budget.dashscope') === 'month' ? 'month' : 'period'; }
+    catch (_) { return 'period'; }
+  })();
   let selectedTxnIds = new Set(); // ids of transactions checked for bulk action
   // Sub-drilldown INSIDE the Pay periods focused view (not a 6th top-level view).
   // Mirrors Travel's trip-list → trip-detail pattern.
@@ -201,6 +212,38 @@
 
   function activePeriod() {
     return periodForDate(todayKey());
+  }
+
+  // Synthetic period covering one calendar month. Semi-monthly periods tile
+  // months exactly (1–15 + 16–EOM), so all range-derived math — spending,
+  // category totals, refund netting — works unchanged on this object.
+  // Expected income and allocations are summed from the real periods inside.
+  function monthAsPeriod(yyyymm) {
+    const [y, m] = yyyymm.split('-').map(Number);
+    const startDate = `${yyyymm}-01`;
+    const endDate = `${yyyymm}-${pad2(new Date(y, m, 0).getDate())}`;
+    const inside = (getBudget().payPeriods || []).filter(
+      (p) => p.startDate >= startDate && p.startDate <= endDate
+    );
+    const allocMap = {};
+    inside.forEach((p) => (p.allocations || []).forEach((a) => {
+      allocMap[a.categoryId] = (allocMap[a.categoryId] || 0) + (a.amountCents || 0);
+    }));
+    const label = new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    return {
+      id: 'month:' + yyyymm,
+      label,
+      startDate,
+      endDate,
+      expectedIncomeCents: inside.reduce((s, p) => s + (p.expectedIncomeCents || 0), 0),
+      allocations: Object.entries(allocMap).map(([categoryId, amountCents]) => ({ categoryId, amountCents })),
+    };
+  }
+
+  // The period-or-month the dashboard is currently scoped to.
+  function dashScopePeriod() {
+    if (dashScope === 'month') return monthAsPeriod(todayKey().slice(0, 7));
+    return activePeriod();
   }
 
   // Returns the FIRST other period that overlaps `period`, or null.
@@ -587,6 +630,24 @@
   function gotoView(viewId) {
     activeView = viewId;
     txFilter = 'all';
+    txAccountFilter = '';
+    txCategoryFilter = '';
+    txScopeFilter = '';
+    txSort = 'date-desc';
+    selectedTxnIds = new Set();
+    activePeriodId = null;
+    render();
+  }
+
+  // Drill-down entry: open Transactions pre-filtered (e.g. from a top-categories
+  // row). Sets filters directly — gotoView would wipe them.
+  function gotoTransactionsFiltered(categoryId, scopeValue) {
+    activeView = 'transactions';
+    txFilter = 'all';
+    txAccountFilter = '';
+    txCategoryFilter = categoryId || '';
+    txScopeFilter = scopeValue || '';
+    txSort = 'date-desc';
     selectedTxnIds = new Set();
     activePeriodId = null;
     render();
@@ -609,6 +670,10 @@
     eyebrow.textContent = 'A calm view of money';
     wrap.appendChild(eyebrow);
 
+    // Checking balances at a glance — the cash-first answer to "where am I?"
+    const glance = buildCheckingGlance();
+    if (glance) wrap.appendChild(glance);
+
     // Pay-period headline card (or empty placeholder)
     wrap.appendChild(buildPayPeriodHeadline());
 
@@ -625,6 +690,11 @@
     const topCats = buildTopCategoriesCard();
     if (topCats) wrap.appendChild(topCats);
 
+    // Sweep helper — the end-of-period ritual: what's safely movable from
+    // Everyday Checking toward a debt after upcoming bills are covered.
+    const sweep = buildSweepCard();
+    if (sweep) wrap.appendChild(sweep);
+
     // Upcoming bills (only if any in next 14 days)
     const upcoming = buildUpcomingBillsTile();
     if (upcoming) wrap.appendChild(upcoming);
@@ -640,8 +710,116 @@
     return wrap;
   }
 
-  function buildPayPeriodHeadline() {
+  // Two checking balances, always visible. Null when no checking accounts.
+  function buildCheckingGlance() {
+    const checkings = (getBudget().accounts || []).filter(
+      (a) => !a.archived && a.type === 'checking'
+    );
+    if (!checkings.length) return null;
+    const wrap = document.createElement('div');
+    wrap.className = 'budget-checking-glance';
+    checkings.forEach((acc) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'budget-cg-item';
+      const name = document.createElement('span');
+      name.className = 'budget-cg-name';
+      name.textContent = acc.name.replace(/\s*\.\.\..*$/, '').replace(/WELLS FARGO\s*/i, '');
+      const bal = document.createElement('span');
+      bal.className = 'budget-cg-balance';
+      const cents = accountBalance(acc);
+      bal.textContent = formatCents(cents);
+      if (cents < 0) bal.classList.add('is-negative');
+      const state = document.createElement('span');
+      state.className = 'budget-cg-state';
+      state.textContent = accountBalanceState(acc);
+      item.appendChild(name);
+      item.appendChild(bal);
+      item.appendChild(state);
+      item.addEventListener('click', () => {
+        activeView = 'transactions';
+        txFilter = 'all';
+        txAccountFilter = acc.id;
+        txCategoryFilter = '';
+        txScopeFilter = '';
+        selectedTxnIds = new Set();
+        activePeriodId = null;
+        render();
+      });
+      wrap.appendChild(item);
+    });
+    return wrap;
+  }
+
+  // Sum + count of recurring-bill occurrences due in [today, endDate].
+  function upcomingBillsThrough(endDate, accountId) {
+    const today = todayKey();
+    const days = Math.max(0, daysBetween(today, endDate));
+    let count = 0;
+    let totalCents = 0;
+    (getBudget().recurringBills || [])
+      .filter((r) => !r.archived && (!accountId || r.accountId === accountId))
+      .forEach((bill) => {
+        const occ = upcomingOccurrences(bill, days);
+        count += occ.length;
+        totalCents += occ.length * (bill.amountCents || 0);
+      });
+    return { count, totalCents };
+  }
+
+  function buildSweepCard() {
+    const b = getBudget();
     const period = activePeriod();
+    if (!period) return null;
+    const everyday = (b.accounts || []).find(
+      (a) => !a.archived && a.type === 'checking' && /everyday/i.test(a.name)
+    ) || (b.accounts || []).find((a) => !a.archived && a.type === 'checking');
+    if (!everyday) return null;
+
+    const bal = accountBalance(everyday);
+    const bills = upcomingBillsThrough(period.endDate, everyday.id);
+    const sweepable = bal - bills.totalCents;
+
+    const card = document.createElement('section');
+    card.className = 'budget-sweep';
+    const title = document.createElement('h3');
+    title.className = 'budget-sweep-title';
+    title.textContent = 'Sweep check';
+    card.appendChild(title);
+
+    const line = document.createElement('p');
+    line.className = 'budget-sweep-line';
+    const billBit = bills.count
+      ? `≈${formatCents(bills.totalCents)} in ${bills.count} bill${bills.count === 1 ? '' : 's'} before ${fmtDateShort(period.endDate)}`
+      : `no bills due before ${fmtDateShort(period.endDate)}`;
+    line.textContent = `Everyday Checking holds ${formatCents(bal)} · ${billBit}`;
+    card.appendChild(line);
+
+    const headline = document.createElement('p');
+    headline.className = 'budget-sweep-amount';
+    headline.textContent = sweepable > 0
+      ? `≈${formatCents(sweepable)} safe to sweep toward debt`
+      : 'Nothing safely sweepable right now';
+    if (sweepable <= 0) headline.classList.add('is-none');
+    card.appendChild(headline);
+
+    if (sweepable > 0) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-ghost btn-sm';
+      btn.textContent = 'Log sweep transfer';
+      btn.addEventListener('click', () => openTransferModal(null, {
+        fromAccountId: everyday.id,
+        amountCents: sweepable,
+        description: 'Month-end sweep toward debt',
+      }));
+      card.appendChild(btn);
+    }
+    return card;
+  }
+
+  function buildPayPeriodHeadline() {
+    const period = dashScopePeriod();
     const card = document.createElement('div');
     card.className = 'budget-pp-card';
 
@@ -673,26 +851,58 @@
     const today = todayKey();
     const daysLeft = Math.max(0, daysBetween(today, period.endDate));
 
+    // Label row with the Period ⇄ Month scope toggle
+    const labelRow = document.createElement('div');
+    labelRow.className = 'budget-pp-label-row';
     const label = document.createElement('p');
     label.className = 'budget-pp-label';
     label.textContent = period.label || 'Current period';
-    card.appendChild(label);
+    labelRow.appendChild(label);
+    const scopeWrap = document.createElement('div');
+    scopeWrap.className = 'budget-pp-scope';
+    [['period', 'Period'], ['month', 'Month']].forEach(([id, text]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'budget-pp-scope-btn' + (dashScope === id ? ' is-active' : '');
+      btn.textContent = text;
+      btn.addEventListener('click', () => {
+        dashScope = id;
+        try { localStorage.setItem('pike.budget.dashscope', id); } catch (_) {}
+        render();
+      });
+      scopeWrap.appendChild(btn);
+    });
+    labelRow.appendChild(scopeWrap);
+    card.appendChild(labelRow);
 
     const headline = document.createElement('p');
     headline.className = 'budget-pp-headline';
-    headline.textContent = formatCents(remaining);
-    if (remaining < 0) headline.classList.add('is-negative');
+    headline.textContent = spent < 0
+      ? `${formatCents(Math.abs(spent))} net credit`
+      : `${formatCents(spent)} spent`;
     card.appendChild(headline);
 
+    // Status in plain words — never a bare unexplained number. This is the
+    // budget view (plan vs actual); bank balances live in the glance above.
     const sub = document.createElement('p');
     sub.className = 'budget-pp-sub';
     const dayLabel = daysLeft === 0 ? 'last day' : (daysLeft === 1 ? '1 day left' : `${daysLeft} days left`);
-    if (spent < 0) {
-      sub.textContent = `${formatCents(Math.abs(spent))} net credit · ${dayLabel}`;
-    } else {
-      sub.textContent = `${formatCents(spent)} spent of ${formatCents(expected)} · ${dayLabel}`;
-    }
+    let statusBit;
+    if (spent < 0)             statusBit = 'refunds exceed spending';
+    else if (remaining >= 0)   statusBit = `${formatCents(remaining)} left of ${formatCents(expected)} planned`;
+    else                       statusBit = `${formatCents(Math.abs(remaining))} over the ${formatCents(expected)} plan`;
+    sub.textContent = `${statusBit} · ${dayLabel}`;
+    if (remaining < 0 && spent >= 0) sub.classList.add('is-over');
     card.appendChild(sub);
+
+    // Bills still to come inside this scope — context the balance needs.
+    const stillToCome = upcomingBillsThrough(period.endDate, null);
+    if (stillToCome.count > 0) {
+      const stc = document.createElement('p');
+      stc.className = 'budget-pp-debt';
+      stc.textContent = `${stillToCome.count} bill${stillToCome.count === 1 ? '' : 's'} still to come by ${fmtDateShort(period.endDate)} · ≈${formatCents(stillToCome.totalCents)}`;
+      card.appendChild(stc);
+    }
 
     // Progress bar — clamped to [0, 100] so net credits render as an empty bar
     // rather than an inverted/negative width.
@@ -817,8 +1027,9 @@
   }
 
   function buildTopCategoriesCard() {
-    const period = activePeriod();
+    const period = dashScopePeriod();
     if (!period) return null;
+    const scopeValue = String(period.id).startsWith('month:') ? period.id : 'period:' + period.id;
 
     const b = getBudget();
     const categories = b.categories || [];
@@ -848,7 +1059,7 @@
 
     const title = document.createElement('h3');
     title.className   = 'budget-top-cats-title';
-    title.textContent = 'Top categories this period';
+    title.textContent = dashScope === 'month' ? 'Top categories this month' : 'Top categories this period';
     head.appendChild(title);
 
     const viewAll = document.createElement('button');
@@ -856,9 +1067,13 @@
     viewAll.className = 'budget-top-cats-viewall';
     viewAll.textContent = 'View all →';
     viewAll.addEventListener('click', () => {
-      activeView    = 'payperiods';
-      activePeriodId = period.id;
-      render();
+      if (String(period.id).startsWith('month:')) {
+        gotoTransactionsFiltered(null, period.id);
+      } else {
+        activeView    = 'payperiods';
+        activePeriodId = period.id;
+        render();
+      }
     });
     head.appendChild(viewAll);
     card.appendChild(head);
@@ -868,7 +1083,8 @@
 
     top.forEach(({ cat, spent, allocCents }) => {
       const row = document.createElement('div');
-      row.className = 'budget-top-cats-row';
+      row.className = 'budget-top-cats-row is-clickable';
+      row.addEventListener('click', () => gotoTransactionsFiltered(cat.id, scopeValue));
 
       const nameEl = document.createElement('span');
       nameEl.className   = 'budget-top-cats-name';
@@ -2464,7 +2680,83 @@
     });
     wrap.appendChild(filterBar);
 
-    const allTxns = getBudget().transactions || [];
+    const b = getBudget();
+    const allTxns = b.transactions || [];
+
+    // ── Filter & sort selects ──────────────────────────────────────────────
+    const selects = document.createElement('div');
+    selects.className = 'budget-tx-selects';
+
+    const mkSelect = (options, current, onChange, ariaLabel) => {
+      const sel = document.createElement('select');
+      sel.className = 'input budget-tx-select';
+      sel.setAttribute('aria-label', ariaLabel);
+      options.forEach(([value, text]) => {
+        const o = document.createElement('option');
+        o.value = value;
+        o.textContent = text;
+        if (value === current) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.addEventListener('change', () => {
+        onChange(sel.value);
+        selectedTxnIds = new Set();
+        render();
+      });
+      return sel;
+    };
+
+    const accountOpts = [['', 'All accounts']].concat(
+      (b.accounts || []).filter((a) => !a.archived)
+        .sort((x, y) => x.name.localeCompare(y.name))
+        .map((a) => [a.id, a.name])
+    );
+    selects.appendChild(mkSelect(accountOpts, txAccountFilter, (v) => { txAccountFilter = v; }, 'Filter by account'));
+
+    const categoryOpts = [['', 'All categories']].concat(
+      (b.categories || []).filter((c) => !c.archived)
+        .sort((x, y) => x.name.localeCompare(y.name))
+        .map((c) => [c.id, c.name])
+    );
+    selects.appendChild(mkSelect(categoryOpts, txCategoryFilter, (v) => { txCategoryFilter = v; }, 'Filter by category'));
+
+    // Date scope: months (from actual transaction dates) and pay periods.
+    const monthSet = new Set(allTxns.filter((t) => !t.plaidRemoved && t.date).map((t) => t.date.slice(0, 7)));
+    const monthOpts = [...monthSet].sort().reverse().map((ym) => {
+      const [y, m] = ym.split('-').map(Number);
+      return ['month:' + ym, new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })];
+    });
+    const periodOpts = (b.payPeriods || []).slice()
+      .sort((x, y) => y.startDate.localeCompare(x.startDate))
+      .map((p) => ['period:' + p.id, `${p.label} (${p.startDate.slice(0, 4)})`]);
+    selects.appendChild(mkSelect(
+      [['', 'All dates']].concat(monthOpts).concat(periodOpts),
+      txScopeFilter, (v) => { txScopeFilter = v; }, 'Filter by date range'
+    ));
+
+    selects.appendChild(mkSelect([
+      ['date-desc',   'Newest first'],
+      ['date-asc',    'Oldest first'],
+      ['amount-desc', 'Largest first'],
+      ['amount-asc',  'Smallest first'],
+    ], txSort, (v) => { txSort = v; }, 'Sort order'));
+
+    if (txAccountFilter || txCategoryFilter || txScopeFilter) {
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'budget-action-btn';
+      clearBtn.textContent = 'Clear filters';
+      clearBtn.addEventListener('click', () => {
+        txAccountFilter = '';
+        txCategoryFilter = '';
+        txScopeFilter = '';
+        selectedTxnIds = new Set();
+        render();
+      });
+      selects.appendChild(clearBtn);
+    }
+    wrap.appendChild(selects);
+
     let visible = allTxns.filter((t) => !t.plaidRemoved);
     if (txFilter === 'unassigned') {
       visible = visible.filter((t) => !periodForDate(t.date));
@@ -2474,9 +2766,28 @@
         !t.categoryId && !(Array.isArray(t.splits) && t.splits.length)
       );
     }
-    // Hide inflow legs of transfers (one row per pair, the outflow leg).
+    if (txAccountFilter) {
+      visible = visible.filter((t) => t.accountId === txAccountFilter);
+    }
+    if (txCategoryFilter) {
+      visible = visible.filter((t) =>
+        t.categoryId === txCategoryFilter ||
+        (Array.isArray(t.splits) && t.splits.some((s) => s.categoryId === txCategoryFilter))
+      );
+    }
+    if (txScopeFilter.startsWith('month:')) {
+      const ym = txScopeFilter.slice(6);
+      visible = visible.filter((t) => (t.date || '').slice(0, 7) === ym);
+    } else if (txScopeFilter.startsWith('period:')) {
+      const p = (b.payPeriods || []).find((x) => x.id === txScopeFilter.slice(7));
+      if (p) visible = visible.filter((t) => t.date >= p.startDate && t.date <= p.endDate);
+    }
+    // Hide inflow legs of transfers (one row per pair, the outflow leg) —
+    // unless the account filter points AT the receiving account, where the
+    // inflow leg is the one that belongs in the list.
     visible = visible.filter((t) => {
       if (t.kind !== 'transfer' && t.kind !== 'debt-payment') return true;
+      if (txAccountFilter) return t.accountId === txAccountFilter;
       return t.direction === 'outflow';
     });
 
@@ -2506,6 +2817,7 @@
 
     if (!visible.length) {
       wrap.appendChild(buildEmpty(
+        (txAccountFilter || txCategoryFilter || txScopeFilter) ? 'No transactions match these filters.' :
         txFilter === 'unassigned'    ? 'No unassigned transactions.' :
         txFilter === 'uncategorized' ? 'No uncategorized transactions.' :
         'No transactions yet. Tap + Transaction to log one, or + Transfer to move money.'
@@ -2513,9 +2825,14 @@
       return wrap;
     }
 
-    visible.sort((a, b) => {
-      if (a.date !== b.date) return b.date.localeCompare(a.date);
-      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    visible.sort((a, b2) => {
+      if (txSort === 'amount-desc') return (b2.amountCents || 0) - (a.amountCents || 0);
+      if (txSort === 'amount-asc')  return (a.amountCents || 0) - (b2.amountCents || 0);
+      const cmp = txSort === 'date-asc'
+        ? a.date.localeCompare(b2.date)
+        : b2.date.localeCompare(a.date);
+      if (cmp !== 0) return cmp;
+      return (b2.createdAt || '').localeCompare(a.createdAt || '');
     });
 
     const list = document.createElement('div');
@@ -3230,8 +3547,9 @@
 
   // ─── Transfer modal (atomic two-leg) ─────────────────────────────────────────
 
-  function openTransferModal(existingLeg) {
+  function openTransferModal(existingLeg, prefill) {
     const isEdit = !!existingLeg;
+    const pre = prefill || {};
     const accounts = (getBudget().accounts || []).filter((a) => !a.archived);
 
     if (accounts.length < 2 && !isEdit) {
@@ -3254,10 +3572,10 @@
     }
 
     const initialDate = isEdit ? outflowLeg.date : todayKey();
-    const initialFrom = isEdit ? outflowLeg.accountId : '';
-    const initialTo   = isEdit ? (inflowLeg ? inflowLeg.accountId : '') : '';
-    const initialAmt  = isEdit ? outflowLeg.amountCents : 0;
-    const initialDesc = isEdit ? (outflowLeg.description || '') : '';
+    const initialFrom = isEdit ? outflowLeg.accountId : (pre.fromAccountId || '');
+    const initialTo   = isEdit ? (inflowLeg ? inflowLeg.accountId : '') : (pre.toAccountId || '');
+    const initialAmt  = isEdit ? outflowLeg.amountCents : (pre.amountCents || 0);
+    const initialDesc = isEdit ? (outflowLeg.description || '') : (pre.description || '');
     const initialMerc = isEdit ? (outflowLeg.merchant || '') : '';
 
     const form = document.createElement('form');

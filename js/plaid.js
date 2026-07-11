@@ -644,6 +644,9 @@
 
       // ── Add new settled transactions ────────────────────────────────────────
       toAdd.forEach((t) => {
+        // Guard against double-adds if a prior save-cursor failed and the same
+        // delta arrives twice (auto-sync + manual sync can overlap).
+        if (byPlaidId[t.transaction_id] !== undefined) return;
         const accountId = accountMap[t.account_id];
         if (!accountId) return;
         const amountCents = Math.round(Math.abs(t.amount) * 100);
@@ -776,6 +779,13 @@
       errLine.style.color = 'var(--warning)';
       errLine.textContent = lastError;
       wrap.appendChild(errLine);
+    }
+
+    if (autoSyncSummary) {
+      const syncLine = document.createElement('p');
+      syncLine.className = 'plaid-status-line';
+      syncLine.textContent = autoSyncSummary;
+      wrap.appendChild(syncLine);
     }
 
     connectedItems.forEach((item) => {
@@ -942,10 +952,83 @@
 
   // ── Init ──────────────────────────────────────────────────────────────────────
 
+  // ── Auto-sync ─────────────────────────────────────────────────────────────────
+  // Silent background import, throttled per device. Same classification as the
+  // manual flow (pending skipped, dedupe by plaidTransactionId, unmapped
+  // accounts skipped) — but commits without a preview. Rules categorize on the
+  // way in and the budget matcher flags transfer pairs, so review happens by
+  // exception via the dashboard banners rather than a confirm step.
+
+  const AUTO_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;  // 6 hours
+  const AUTO_SYNC_KEY = 'pike.plaid.lastAutoSync';
+  let autoSyncSummary = null;
+
+  async function autoSyncItem(item) {
+    const res = await callEdge({ action: 'sync' }, { item_id: item.id });
+    if (!res || res.error) {
+      console.warn('Pike: auto-sync failed for', item.institution_name, res && res.error);
+      return { added: 0, updated: 0, removed: 0 };
+    }
+    const added    = res.added    || [];
+    const modified = res.modified || [];
+    const removed  = res.removed  || [];
+
+    const mappedAccounts = getMappedPikeAccounts(item.id);
+    const accountMap = {};
+    mappedAccounts.forEach((a) => { if (a.plaidAccountId) accountMap[a.plaidAccountId] = a.id; });
+    const existingIds = getExistingPlaidIds();
+
+    const settledAdded    = added.filter((t) => !t.pending);
+    const newTxns         = settledAdded.filter((t) => !existingIds.has(t.transaction_id) && accountMap[t.account_id]);
+    const toUpdate        = modified.filter((t) => !t.pending && existingIds.has(t.transaction_id));
+    const newFromModified = modified.filter((t) => !t.pending && !existingIds.has(t.transaction_id) && accountMap[t.account_id]);
+    const toRemoveIds     = removed.map((t) => t.transaction_id).filter((id) => existingIds.has(id));
+    const allToAdd        = [...newTxns, ...newFromModified];
+
+    if (allToAdd.length || toUpdate.length || toRemoveIds.length) {
+      commitSync(allToAdd, toUpdate, toRemoveIds, accountMap, item.id, res.next_cursor || null);
+    } else if (res.next_cursor) {
+      // Nothing to commit but the cursor advanced (e.g. pending-only churn) —
+      // save it so the next sync doesn't re-walk the same delta.
+      callEdge({ action: 'save-cursor' }, { item_id: item.id, cursor: res.next_cursor })
+        .catch((e) => console.warn('Pike: save-cursor failed', e));
+    }
+    return { added: allToAdd.length, updated: toUpdate.length, removed: toRemoveIds.length };
+  }
+
+  async function maybeAutoSync() {
+    if (!connectedItems.length) return;
+    let last = 0;
+    try { last = Number(localStorage.getItem(AUTO_SYNC_KEY) || 0); } catch (_) {}
+    if (Date.now() - last < AUTO_SYNC_INTERVAL_MS) return;
+    // Stamp BEFORE running so an error can't cause a retry loop on every render.
+    try { localStorage.setItem(AUTO_SYNC_KEY, String(Date.now())); } catch (_) {}
+
+    let added = 0, updated = 0, removed = 0;
+    for (const item of connectedItems) {
+      try {
+        const r = await autoSyncItem(item);
+        added += r.added; updated += r.updated; removed += r.removed;
+      } catch (e) {
+        console.warn('Pike: auto-sync error for', item.institution_name, e);
+      }
+    }
+    if (added || updated || removed) {
+      const bits = [`${added} imported`];
+      if (updated) bits.push(`${updated} updated`);
+      if (removed) bits.push(`${removed} removed`);
+      autoSyncSummary = `Auto-sync just now · ${bits.join(' · ')}`;
+      await fetchPreview();
+      render();
+      if (Pike.budget && Pike.budget.render) Pike.budget.render();
+    }
+  }
+
   async function init() {
     await refreshStatus();
     if (connectedItems.length) await fetchPreview();
     render();
+    maybeAutoSync();  // background — not awaited
   }
 
   Pike.plaid = { init, render, connect, disconnect, refreshStatus, fetchPreview };
