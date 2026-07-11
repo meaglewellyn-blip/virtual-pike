@@ -3505,14 +3505,23 @@
     function setSplitsMode(on) {
       splitsOn = on;
       splitsBox.hidden = !on;
+      // Belt and suspenders: the hidden attribute alone lost to the CSS
+      // display rule, leaving the editor visible while submit ignored it.
+      splitsBox.style.display = on ? '' : 'none';
       categoryField.style.display = on ? 'none' : '';
       splitToggleBtn.textContent = on ? 'Use a single category' : 'Split this transaction';
+      if (!on) {
+        // Clear rows on toggle-off so hidden values can't linger and surprise.
+        splitListEl.innerHTML = '';
+      }
       if (on && !splitListEl.children.length) {
         // Seed with one row.
         addSplitRow({ categoryId: currentCategoriesForUI()[0]?.id, amountCents: 0 });
       }
       recalcSplits();
     }
+    // Apply the initial state explicitly — the box must start truly hidden.
+    splitsBox.style.display = splitsOn ? '' : 'none';
 
     splitToggleBtn.addEventListener('click', () => setSplitsMode(!splitsOn));
     splitAddBtn.addEventListener('click', () => {

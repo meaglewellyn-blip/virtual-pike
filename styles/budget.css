@@ -1369,3 +1369,10 @@
 .budget-cat-row.is-clickable:hover .budget-cat-name {
   color: var(--accent-strong);
 }
+
+/* The authored display:flex above beats the hidden attribute's UA rule —
+   without this, the splits editor was ALWAYS visible and rows filled in
+   while "hidden" were silently discarded on save. */
+.budget-splits[hidden] {
+  display: none;
+}
