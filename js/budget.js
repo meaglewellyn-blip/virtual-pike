@@ -597,6 +597,30 @@
     return count;
   }
 
+  // ── Bill reconciliation ──────────────────────────────────────────────────────
+  // Finds the transaction that "pays" a bill occurrence, so upcoming bills
+  // check themselves off when the imported payment lands (no auto-logging —
+  // Plaid brings the real transaction; logging would double-count).
+  // A match is: an outflow within ±4 days that is either explicitly linked
+  // (recurringBillId) or whose merchant/description contains the bill's
+  // matchValue (fallback: bill name) with the amount within ±$1 or ±15%.
+  // Near-identical sibling plans (two Affirm bills a day apart) can briefly
+  // claim the same transaction — both resolve once both payments post.
+  function occurrencePaidTxn(bill, occDate) {
+    const txns = getBudget().transactions || [];
+    const matchVal = (bill.matchValue || bill.name || '').toLowerCase().trim();
+    const tolerance = Math.max(100, Math.round((bill.amountCents || 0) * 0.15));
+    return txns.find((t) => {
+      if (t.plaidRemoved || t.direction !== 'outflow') return false;
+      if (Math.abs(daysBetween(occDate, t.date)) > 4) return false;
+      if (t.recurringBillId === bill.id) return true;
+      if (!matchVal) return false;
+      if (Math.abs((t.amountCents || 0) - (bill.amountCents || 0)) > tolerance) return false;
+      const m = `${t.merchant || ''} ${t.description || ''}`.toLowerCase();
+      return m.includes(matchVal);
+    }) || null;
+  }
+
   // For "Log now" duplicate warning — flexible match by merchant + date + account.
   function findDuplicateTxnsForBill(bill, occurrenceDate) {
     return (getBudget().transactions || []).filter((t) =>
@@ -752,6 +776,8 @@
   }
 
   // Sum + count of recurring-bill occurrences due in [today, endDate].
+  // Occurrences whose payment already imported are excluded — "still to come"
+  // and the sweep math must only count money that hasn't left yet.
   function upcomingBillsThrough(endDate, accountId) {
     const today = todayKey();
     const days = Math.max(0, daysBetween(today, endDate));
@@ -760,9 +786,11 @@
     (getBudget().recurringBills || [])
       .filter((r) => !r.archived && (!accountId || r.accountId === accountId))
       .forEach((bill) => {
-        const occ = upcomingOccurrences(bill, days);
-        count += occ.length;
-        totalCents += occ.length * (bill.amountCents || 0);
+        upcomingOccurrences(bill, days).forEach((occDate) => {
+          if (occurrencePaidTxn(bill, occDate)) return;
+          count += 1;
+          totalCents += bill.amountCents || 0;
+        });
       });
     return { count, totalCents };
   }
@@ -1149,8 +1177,10 @@
   }
 
   function buildUpcomingRow(bill, dateStr) {
+    const paidTxn = occurrencePaidTxn(bill, dateStr);
+
     const row = document.createElement('div');
-    row.className = 'budget-upcoming-row';
+    row.className = 'budget-upcoming-row' + (paidTxn ? ' is-paid' : '');
 
     const main = document.createElement('div');
     main.className = 'budget-upcoming-main';
@@ -1158,25 +1188,33 @@
     name.className = 'budget-upcoming-name';
     name.textContent = bill.name;
     const due = document.createElement('span');
-    due.className = 'budget-upcoming-due';
-    const days = daysBetween(todayKey(), dateStr);
-    due.textContent = days === 0 ? 'today' : days === 1 ? 'tomorrow' : days <= 7 ? `in ${days} days` : fmtDateShort(dateStr);
+    due.className = 'budget-upcoming-due' + (paidTxn ? ' is-paid' : '');
+    if (paidTxn) {
+      due.textContent = `✓ paid ${fmtDateShort(paidTxn.date)}`;
+    } else {
+      const days = daysBetween(todayKey(), dateStr);
+      due.textContent = days === 0 ? 'today' : days === 1 ? 'tomorrow' : days <= 7 ? `in ${days} days` : fmtDateShort(dateStr);
+    }
     main.appendChild(name);
     main.appendChild(due);
 
     const amount = document.createElement('span');
     amount.className = 'budget-upcoming-amount';
-    amount.textContent = formatCents(bill.amountCents || 0);
-
-    const logBtn = document.createElement('button');
-    logBtn.type = 'button';
-    logBtn.className = 'btn btn-ghost btn-sm';
-    logBtn.textContent = 'Log now';
-    logBtn.addEventListener('click', () => openLogBillFlow(bill, dateStr));
+    amount.textContent = formatCents(paidTxn ? paidTxn.amountCents : (bill.amountCents || 0));
 
     row.appendChild(main);
     row.appendChild(amount);
-    row.appendChild(logBtn);
+    if (paidTxn) {
+      const spacer = document.createElement('span');
+      row.appendChild(spacer);
+    } else {
+      const logBtn = document.createElement('button');
+      logBtn.type = 'button';
+      logBtn.className = 'btn btn-ghost btn-sm';
+      logBtn.textContent = 'Log now';
+      logBtn.addEventListener('click', () => openLogBillFlow(bill, dateStr));
+      row.appendChild(logBtn);
+    }
     return row;
   }
 
@@ -3140,6 +3178,15 @@
                  value="${esc((existingBill || {}).anchorDate || tx.date)}">
         </label>
       </div>
+      <label class="budget-field">
+        <span>End date (optional — for installment plans)</span>
+        <input type="date" class="input" name="endDate" value="${esc((existingBill || {}).endDate || '')}">
+      </label>
+      ${tx.merchant ? `
+      <label class="budget-field" style="flex-direction:row;align-items:center;gap:var(--space-2);">
+        <input type="checkbox" name="makeRule" ${tx.categoryId ? '' : 'checked'} style="width:16px;height:16px;">
+        <span style="font-size:var(--fs-sm);font-weight:400;text-transform:none;letter-spacing:0;">Remember "${esc(tx.merchant)}" — auto-categorize future imports with the category above</span>
+      </label>` : ''}
     `;
 
     const actions = document.createElement('div');
@@ -3175,6 +3222,9 @@
       const categoryId       = String(fd.get('categoryId') || '') || null;
       const cadence          = String(fd.get('cadence') || 'monthly');
       const anchorDate       = String(fd.get('anchorDate') || tx.date);
+      const endDate          = String(fd.get('endDate') || '').trim() || null;
+      const makeRule         = !!fd.get('makeRule');
+      const matchValue       = (tx.merchant || '').toLowerCase().trim() || null;
       const now              = new Date().toISOString();
 
       global.Pike.state.commit((d) => {
@@ -3187,20 +3237,38 @@
             b.name = name; b.amountCents = amountCents;
             b.accountId = accountId; b.counterAccountId = counterAccountId;
             b.categoryId = categoryId; b.cadence = cadence;
-            b.anchorDate = anchorDate;
+            b.anchorDate = anchorDate; b.endDate = endDate;
+            if (!b.matchValue && matchValue) b.matchValue = matchValue;
           }
         } else {
           billId = uid('rec');
           d.budget.recurringBills.push({
             id: billId, name, amountCents,
             categoryId, accountId, counterAccountId,
-            cadence, anchorDate,
+            cadence, anchorDate, endDate,
+            matchValue,
             autopay: false, notes: '', archived: false,
           });
         }
-        // Link the transaction — does NOT change its category, amount, or kind.
+        // Link the transaction — links only; kind and amount stay untouched.
         const t = (d.budget.transactions || []).find((x) => x.id === tx.id);
         if (t) { t.recurringBillId = billId; t.updatedAt = now; }
+
+        // One-gesture "this is a subscription now": also create a category
+        // rule for the merchant so every future import self-categorizes, and
+        // categorize this transaction if it wasn't already.
+        if (makeRule && matchValue && categoryId) {
+          if (!d.budget.rules) d.budget.rules = [];
+          let rule = d.budget.rules.find((r) =>
+            r.matchType === 'merchantContains' && r.matchValue === matchValue
+          );
+          if (!rule) {
+            rule = { id: uid('rul'), matchType: 'merchantContains', matchValue,
+                     categoryId, priority: 50, enabled: true };
+            d.budget.rules.push(rule);
+          }
+          if (t && !t.categoryId) { t.categoryId = categoryId; t.ruleAppliedId = rule.id; }
+        }
       });
       global.Pike.modal.close();
     });
@@ -3933,6 +4001,11 @@
         <span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:400;">The last payment date. After it passes, the bill falls off upcoming lists automatically — made for BNPL plans like Affirm and Klarna.</span>
       </label>
       <label class="budget-field">
+        <span>Payment match (optional)</span>
+        <input type="text" class="input" name="matchValue" value="${esc(bill.matchValue || '')}" placeholder="e.g. netflix">
+        <span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:400;">Merchant text that identifies this bill's payments in imported transactions — lets upcoming bills check themselves off when the payment lands.</span>
+      </label>
+      <label class="budget-field">
         <span>Notes (optional)</span>
         <textarea class="input" name="notes" rows="2">${esc(bill.notes || '')}</textarea>
       </label>
@@ -3976,6 +4049,7 @@
       const cadence = String(fd.get('cadence') || 'monthly');
       const anchorDate = String(fd.get('anchorDate') || todayKey());
       const endDate = String(fd.get('endDate') || '').trim() || null;
+      const matchValue = String(fd.get('matchValue') || '').trim().toLowerCase() || null;
       const notes = String(fd.get('notes') || '').trim();
 
       global.Pike.state.commit((d) => {
@@ -3986,13 +4060,14 @@
             b.name = name; b.amountCents = amountCents;
             b.accountId = accountId; b.counterAccountId = counterAccountId;
             b.categoryId = categoryId; b.cadence = cadence;
-            b.anchorDate = anchorDate; b.endDate = endDate; b.notes = notes;
+            b.anchorDate = anchorDate; b.endDate = endDate;
+            b.matchValue = matchValue; b.notes = notes;
           }
         } else {
           d.budget.recurringBills.push({
             id: uid('rec'), name, amountCents,
             categoryId, accountId, counterAccountId,
-            cadence, anchorDate, endDate,
+            cadence, anchorDate, endDate, matchValue,
             autopay: false, notes, archived: false,
           });
         }
