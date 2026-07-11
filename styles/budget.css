@@ -1376,3 +1376,14 @@
 .budget-splits[hidden] {
   display: none;
 }
+
+/* ── Rules manager ─────────────────────────────────────────────────────────── */
+
+.budget-rule-match {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+.budget-row.budget-rule-off {
+  opacity: 0.55;
+}

@@ -1412,7 +1412,10 @@
   // ─── Focused view dispatch ───────────────────────────────────────────────────
 
   function buildFocusedView(viewId) {
-    const view = VIEWS.find((v) => v.id === viewId) || { id: viewId, title: viewId, blurb: '' };
+    const view = VIEWS.find((v) => v.id === viewId)
+      || (viewId === 'rules'
+        ? { id: 'rules', title: 'Rules', blurb: 'Auto-categorization for imported transactions. Higher priority wins when several rules match.' }
+        : { id: viewId, title: viewId, blurb: '' });
 
     const wrap = document.createElement('div');
     wrap.className = 'budget-focus budget-focus-' + viewId;
@@ -1454,6 +1457,7 @@
     else if (viewId === 'payperiods')   body.appendChild(buildPayPeriodsView());
     else if (viewId === 'transactions') body.appendChild(buildTransactionsView());
     else if (viewId === 'recurring')    body.appendChild(buildRecurringView());
+    else if (viewId === 'rules')        body.appendChild(buildRulesView());
     else                                body.appendChild(buildPlaceholder());
     wrap.appendChild(body);
 
@@ -1470,6 +1474,7 @@
       payperiods:   '+ Pay period',
       transactions: '+ Transaction',
       recurring:    '+ Recurring bill',
+      rules:        '+ Rule',
     };
     const handlers = {
       accounts:     () => openAccountModal(null),
@@ -1477,13 +1482,20 @@
       payperiods:   () => openPayPeriodModal(null),
       transactions: () => openTransactionModal(null, { kind: 'spending' }),
       recurring:    () => openRecurringModal(null),
+      rules:        () => openRuleModal(null),
     };
 
     const addLabel = addLabels[viewId];
     if (!addLabel) return null;
 
-    // Transactions view also gets a "+ Transfer" button.
+    // Transactions view also gets "+ Transfer" and the Rules manager.
     if (viewId === 'transactions') {
+      const rulesBtn = document.createElement('button');
+      rulesBtn.type = 'button';
+      rulesBtn.className = 'btn btn-ghost btn-sm';
+      rulesBtn.textContent = 'Rules';
+      rulesBtn.addEventListener('click', () => gotoView('rules'));
+      wrap.appendChild(rulesBtn);
       const transferBtn = document.createElement('button');
       transferBtn.type = 'button';
       transferBtn.className = 'btn btn-ghost btn-sm';
@@ -3295,6 +3307,215 @@
 
     global.Pike.modal.open({
       title: existingBill ? 'Edit recurring bill' : 'Mark as recurring',
+      body: form,
+    });
+  }
+
+  // ─── Rules manager ───────────────────────────────────────────────────────────
+  // Every rule that auto-categorizes imports, in one place: browse, create,
+  // edit, disable, delete. Creating a rule can backfill existing
+  // uncategorized transactions in the same commit.
+
+  function buildRulesView() {
+    const b = getBudget();
+    const rules = (b.rules || []).slice();
+    const wrap = document.createElement('div');
+    wrap.className = 'budget-list';
+
+    if (!rules.length) {
+      wrap.appendChild(buildEmpty('No rules yet. Tap + Rule, or use "Remember this merchant" when categorizing.'));
+      return wrap;
+    }
+
+    // Matched-transaction counts — a rule that never fires is a candidate
+    // for cleanup; a heavy hitter deserves care when editing.
+    const matchCounts = {};
+    (b.transactions || []).forEach((t) => {
+      if (t.ruleAppliedId) matchCounts[t.ruleAppliedId] = (matchCounts[t.ruleAppliedId] || 0) + 1;
+    });
+
+    rules.sort((x, y) => {
+      if (!!x.enabled !== !!y.enabled) return x.enabled ? -1 : 1;
+      return (x.matchValue || '').localeCompare(y.matchValue || '');
+    });
+    rules.forEach((rule) => wrap.appendChild(buildRuleRow(rule, matchCounts[rule.id] || 0)));
+    return wrap;
+  }
+
+  function buildRuleRow(rule, matchCount) {
+    const b = getBudget();
+    const cat = (b.categories || []).find((c) => c.id === rule.categoryId);
+
+    const row = document.createElement('div');
+    row.className = 'budget-row' + (rule.enabled ? '' : ' budget-rule-off');
+
+    const main = document.createElement('div');
+    main.className = 'budget-row-main';
+    const name = document.createElement('h3');
+    name.className = 'budget-row-name budget-rule-match';
+    name.textContent = `“${rule.matchValue}”`;
+    const meta = document.createElement('p');
+    meta.className = 'budget-row-meta';
+    const typeLabel = rule.matchType === 'merchantEquals' ? 'merchant is exactly' : 'merchant or description contains';
+    const bits = [typeLabel, `→ ${cat ? cat.name : '(missing category)'}`];
+    if ((rule.priority || 0) !== 50) bits.push(`priority ${rule.priority || 0}`);
+    if (!rule.enabled) bits.push('off');
+    meta.textContent = bits.join(' · ');
+    main.appendChild(name);
+    main.appendChild(meta);
+
+    const amountWrap = document.createElement('div');
+    amountWrap.className = 'budget-row-amount-wrap';
+    const amount = document.createElement('div');
+    amount.className = 'budget-row-amount';
+    amount.textContent = String(matchCount);
+    const state = document.createElement('span');
+    state.className = 'budget-row-amount-state';
+    state.textContent = matchCount === 1 ? 'txn matched' : 'txns matched';
+    amountWrap.appendChild(amount);
+    amountWrap.appendChild(state);
+
+    const actions = document.createElement('div');
+    actions.className = 'budget-row-actions';
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'budget-action-btn';
+    toggleBtn.textContent = rule.enabled ? 'Turn off' : 'Turn on';
+    toggleBtn.addEventListener('click', () => {
+      global.Pike.state.commit((d) => {
+        const r = (d.budget.rules || []).find((x) => x.id === rule.id);
+        if (r) r.enabled = !r.enabled;
+      });
+    });
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'budget-action-btn';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => openRuleModal(rule));
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'budget-action-btn';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', () => {
+      if (!confirm(`Delete the "${rule.matchValue}" rule? Transactions it already categorized keep their categories.`)) return;
+      global.Pike.state.commit((d) => {
+        d.budget.rules = (d.budget.rules || []).filter((x) => x.id !== rule.id);
+      });
+    });
+    actions.appendChild(toggleBtn);
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+
+    row.appendChild(main);
+    row.appendChild(amountWrap);
+    row.appendChild(actions);
+    return row;
+  }
+
+  function openRuleModal(existing) {
+    const isEdit = !!existing;
+    const rule = existing || {};
+    const allCategories = (getBudget().categories || []).filter((c) => !c.archived)
+      .sort((x, y) => x.name.localeCompare(y.name));
+
+    const form = document.createElement('form');
+    form.className = 'budget-form';
+    form.autocomplete = 'off';
+    form.innerHTML = `
+      <label class="budget-field">
+        <span>Match text</span>
+        <input type="text" class="input" name="matchValue" required maxlength="80"
+               value="${esc(rule.matchValue || '')}" placeholder="e.g. doordash">
+        <span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:400;">Case-insensitive. Checked against both the merchant and the bank description.</span>
+      </label>
+      <label class="budget-field">
+        <span>Match type</span>
+        <select class="input" name="matchType">
+          <option value="merchantContains" ${rule.matchType !== 'merchantEquals' ? 'selected' : ''}>Merchant or description contains</option>
+          <option value="merchantEquals" ${rule.matchType === 'merchantEquals' ? 'selected' : ''}>Merchant is exactly</option>
+        </select>
+      </label>
+      <label class="budget-field">
+        <span>Category</span>
+        <select class="input" name="categoryId" required>
+          ${allCategories.map((c) =>
+            `<option value="${esc(c.id)}" ${rule.categoryId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`
+          ).join('')}
+        </select>
+      </label>
+      <label class="budget-field">
+        <span>Priority</span>
+        <input type="number" class="input" name="priority" value="${esc(String(rule.priority != null ? rule.priority : 50))}" min="0" max="1000" step="10">
+        <span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:400;">Higher wins when several rules match. Use above 50 for specific rules ("apple card") that must beat generic ones ("apple").</span>
+      </label>
+      <label class="budget-field" style="flex-direction:row;align-items:center;gap:var(--space-2);">
+        <input type="checkbox" name="enabled" ${rule.enabled !== false ? 'checked' : ''} style="width:16px;height:16px;">
+        <span style="font-size:var(--fs-sm);font-weight:400;text-transform:none;letter-spacing:0;">Enabled</span>
+      </label>
+      ${!isEdit ? `
+      <label class="budget-field" style="flex-direction:row;align-items:center;gap:var(--space-2);">
+        <input type="checkbox" name="applyNow" checked style="width:16px;height:16px;">
+        <span style="font-size:var(--fs-sm);font-weight:400;text-transform:none;letter-spacing:0;">Also categorize existing uncategorized transactions that match</span>
+      </label>` : ''}
+      <div class="pike-modal-actions">
+        <button type="button" class="btn" data-modal-close="1">Cancel</button>
+        <button type="submit" class="btn btn-primary">${isEdit ? 'Save' : 'Add rule'}</button>
+      </div>
+    `;
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const matchValue = String(fd.get('matchValue') || '').trim().toLowerCase();
+      if (!matchValue) return;
+      const matchType = String(fd.get('matchType') || 'merchantContains');
+      const categoryId = String(fd.get('categoryId') || '');
+      if (!categoryId) return;
+      const priority = Math.max(0, Math.round(Number(fd.get('priority')) || 50));
+      const enabled = !!fd.get('enabled');
+      const applyNow = !isEdit && !!fd.get('applyNow');
+
+      const dup = (getBudget().rules || []).find((r) =>
+        r.matchType === matchType && r.matchValue === matchValue && r.id !== rule.id
+      );
+      if (dup) {
+        showFormError(form, `A rule for "${matchValue}" already exists — edit that one instead.`);
+        return;
+      }
+
+      const now = new Date().toISOString();
+      global.Pike.state.commit((d) => {
+        if (!d.budget.rules) d.budget.rules = [];
+        let saved;
+        if (isEdit) {
+          saved = d.budget.rules.find((x) => x.id === existing.id);
+          if (saved) {
+            saved.matchValue = matchValue; saved.matchType = matchType;
+            saved.categoryId = categoryId; saved.priority = priority;
+            saved.enabled = enabled;
+          }
+        } else {
+          saved = { id: uid('rul'), matchType, matchValue, categoryId, priority, enabled };
+          d.budget.rules.push(saved);
+        }
+        if (applyNow && saved && enabled) {
+          (d.budget.transactions || []).forEach((t) => {
+            if (t.plaidRemoved || t.transferPairId || t.categoryId) return;
+            if (t.kind !== 'spending' && t.kind !== 'income') return;
+            const m = (t.merchant || '').toLowerCase();
+            const dsc = (t.description || '').toLowerCase();
+            const hit = matchType === 'merchantEquals'
+              ? m.trim() === matchValue
+              : (m.includes(matchValue) || dsc.includes(matchValue));
+            if (hit) { t.categoryId = categoryId; t.ruleAppliedId = saved.id; t.updatedAt = now; }
+          });
+        }
+      });
+      global.Pike.modal.close();
+    });
+
+    global.Pike.modal.open({
+      title: isEdit ? 'Edit rule' : 'Add rule',
       body: form,
     });
   }
