@@ -276,17 +276,45 @@
   //   refund inflows     → subtract (refunds reduce category spending)
   //   transfers / debt-payments → excluded (they aren't spending)
   //   income             → excluded
+  // Categories flagged excludeFromSpending (interest, late fees — the cost of
+  // carrying debt) stay out of the "spent" behavior gauge: they're neither a
+  // choice made this period nor cash leaving checking. They surface on their
+  // own line instead, and still appear in category breakdowns.
+  function excludedFromSpendingCatIds() {
+    return new Set(
+      (getBudget().categories || []).filter((c) => c.excludeFromSpending).map((c) => c.id)
+    );
+  }
+
+  // Interest & fees accrued in this period (flagged categories, refund-netted).
+  function periodFeesCents(period) {
+    if (!period) return 0;
+    let total = 0;
+    excludedFromSpendingCatIds().forEach((id) => { total += categorySpentInPeriod(id, period); });
+    return total;
+  }
+
   // May go negative when refunds exceed spending — callers should display the
   // result calmly (e.g. as a credit balance), not as a noisy red number.
   function periodSpendingCents(period) {
     if (!period) return 0;
+    const excluded = excludedFromSpendingCatIds();
     return (getBudget().transactions || []).reduce((sum, t) => {
       if (t.plaidRemoved) return sum;
       if (t.date < period.startDate || t.date > period.endDate) return sum;
       if (t.kind === 'transfer' || t.kind === 'debt-payment') return sum;
-      if (t.kind === 'spending' && t.direction === 'outflow') return sum + (t.amountCents || 0);
-      if (t.kind === 'refund'   && t.direction === 'inflow')  return sum - (t.amountCents || 0);
-      return sum;
+      let sign = 0;
+      if (t.kind === 'spending' && t.direction === 'outflow') sign = +1;
+      else if (t.kind === 'refund' && t.direction === 'inflow') sign = -1;
+      else return sum;
+      if (Array.isArray(t.splits) && t.splits.length) {
+        const counted = t.splits
+          .filter((s) => !excluded.has(s.categoryId))
+          .reduce((n, s) => n + (s.amountCents || 0), 0);
+        return sum + sign * counted;
+      }
+      if (excluded.has(t.categoryId)) return sum;
+      return sum + sign * (t.amountCents || 0);
     }, 0);
   }
 
@@ -960,6 +988,16 @@
       debt.className = 'budget-pp-debt';
       debt.textContent = `${formatCents(debtPaid)} paid toward debt this period`;
       card.appendChild(debt);
+    }
+
+    // Interest & fees — real cost, but not a spending choice, so it lives
+    // outside the "spent" gauge on its own quiet line.
+    const fees = periodFeesCents(period);
+    if (fees > 0) {
+      const feesLine = document.createElement('p');
+      feesLine.className = 'budget-pp-debt';
+      feesLine.textContent = `${formatCents(fees)} in interest & fees accrued · not counted in spent`;
+      card.appendChild(feesLine);
     }
 
     return card;
@@ -2381,6 +2419,15 @@
       debtLine.className = 'budget-period-debt-paid';
       debtLine.textContent = `${formatCents(debtPaid)} paid toward debt this period`;
       wrap.appendChild(debtLine);
+    }
+
+    // Interest & fees accrued in the period — outside the spent gauge.
+    const fees = periodFeesCents(period);
+    if (fees > 0) {
+      const feesLine = document.createElement('p');
+      feesLine.className = 'budget-period-debt-paid';
+      feesLine.textContent = `${formatCents(fees)} in interest & fees accrued · not counted in spent`;
+      wrap.appendChild(feesLine);
     }
 
     return wrap;
