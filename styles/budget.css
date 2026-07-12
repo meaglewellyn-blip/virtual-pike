@@ -1387,3 +1387,15 @@
 .budget-row.budget-rule-off {
   opacity: 0.55;
 }
+
+/* ── Transaction search ────────────────────────────────────────────────────── */
+
+.budget-tx-search-wrap {
+  margin-top: var(--space-2);
+}
+
+.budget-tx-search {
+  width: 100%;
+  max-width: 420px;
+  font-size: var(--fs-sm);
+}

@@ -103,6 +103,7 @@
   // null = dashboard; otherwise the id of a focused view
   let activeView = null;
   let txFilter = 'all';  // 'all' | 'unassigned' | 'uncategorized'
+  let txSearch = '';                   // free text — matches merchant, description, notes
   let txAccountFilter  = '';           // accountId or '' (all)
   let txCategoryFilter = '';           // categoryId, 'none', or '' (all)
   let txScopeFilter    = '';           // '', 'period:<id>', 'month:YYYY-MM'
@@ -656,6 +657,7 @@
   function gotoView(viewId) {
     activeView = viewId;
     txFilter = 'all';
+    txSearch = '';
     txAccountFilter = '';
     txCategoryFilter = '';
     txScopeFilter = '';
@@ -670,6 +672,7 @@
   function gotoTransactionsFiltered(categoryId, scopeValue) {
     activeView = 'transactions';
     txFilter = 'all';
+    txSearch = '';
     txAccountFilter = '';
     txCategoryFilter = categoryId || '';
     txScopeFilter = scopeValue || '';
@@ -2791,6 +2794,34 @@
     const b = getBudget();
     const allTxns = b.transactions || [];
 
+    // ── Search box — matches merchant, description, and notes ─────────────
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'budget-tx-search-wrap';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'search';
+    searchInput.id = 'budget-tx-search';
+    searchInput.className = 'input budget-tx-search';
+    searchInput.placeholder = 'Search merchant, description, or notes…';
+    searchInput.value = txSearch;
+    let searchTimer = null;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        txSearch = searchInput.value;
+        selectedTxnIds = new Set();
+        render();
+        // render() rebuilds the DOM — put the cursor back where she's typing.
+        const el = document.getElementById('budget-tx-search');
+        if (el) {
+          el.focus();
+          const n = el.value.length;
+          try { el.setSelectionRange(n, n); } catch (_) {}
+        }
+      }, 200);
+    });
+    searchWrap.appendChild(searchInput);
+    wrap.appendChild(searchWrap);
+
     // ── Filter & sort selects ──────────────────────────────────────────────
     const selects = document.createElement('div');
     selects.className = 'budget-tx-selects';
@@ -2850,12 +2881,13 @@
       ['merchant-asc', 'By merchant'],
     ], txSort, (v) => { txSort = v; }, 'Sort order'));
 
-    if (txAccountFilter || txCategoryFilter || txScopeFilter) {
+    if (txAccountFilter || txCategoryFilter || txScopeFilter || txSearch.trim()) {
       const clearBtn = document.createElement('button');
       clearBtn.type = 'button';
       clearBtn.className = 'budget-action-btn';
       clearBtn.textContent = 'Clear filters';
       clearBtn.addEventListener('click', () => {
+        txSearch = '';
         txAccountFilter = '';
         txCategoryFilter = '';
         txScopeFilter = '';
@@ -2867,6 +2899,12 @@
     wrap.appendChild(selects);
 
     let visible = allTxns.filter((t) => !t.plaidRemoved);
+    const q = txSearch.trim().toLowerCase();
+    if (q) {
+      visible = visible.filter((t) =>
+        `${t.merchant || ''} ${t.description || ''} ${t.notes || ''}`.toLowerCase().includes(q)
+      );
+    }
     if (txFilter === 'unassigned') {
       visible = visible.filter((t) => !periodForDate(t.date));
     } else if (txFilter === 'uncategorized') {
@@ -2926,6 +2964,7 @@
 
     if (!visible.length) {
       wrap.appendChild(buildEmpty(
+        q ? `No transactions match “${txSearch.trim()}”.` :
         (txAccountFilter || txCategoryFilter || txScopeFilter) ? 'No transactions match these filters.' :
         txFilter === 'unassigned'    ? 'No unassigned transactions.' :
         txFilter === 'uncategorized' ? 'No uncategorized transactions.' :
