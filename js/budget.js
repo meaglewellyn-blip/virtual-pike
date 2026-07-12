@@ -1268,9 +1268,12 @@
       t.plaidTransactionId &&  // imported only — manual entries are intentional
       (t.kind === 'spending' || t.kind === 'income')
     );
-    const inflows = eligible.filter((t) => t.direction === 'inflow');
     const used = new Set();
     const pairs = [];
+    const WINDOW_DAYS = 5;  // posting lag between the two sides varies
+
+    // Pass 1: classic pairs — equal amounts, opposite directions.
+    const inflows = eligible.filter((t) => t.direction === 'inflow');
     eligible.filter((t) => t.direction === 'outflow').forEach((out) => {
       let best = null;
       let bestGap = Infinity;
@@ -1279,20 +1282,48 @@
         if (inn.amountCents !== out.amountCents) return;
         if (dismissed.has(transferSuggestKey(out.id, inn.id))) return;
         const gap = Math.abs(daysBetween(out.date, inn.date));
-        if (gap > 3 || gap >= bestGap) return;
+        if (gap > WINDOW_DAYS || gap >= bestGap) return;
         best = inn; bestGap = gap;
       });
-      if (best) { used.add(best.id); pairs.push({ out, inn: best }); }
+      if (best) { used.add(best.id); used.add(out.id); pairs.push({ out, inn: best, fixDirection: false }); }
+    });
+
+    // Pass 2: sign-corrected card payments. Some feeds (PayPal Credit) report
+    // the card-side payment credit as an OUTFLOW. Recognize it narrowly: the
+    // card-side MERCHANT reads like a payment marker, amounts equal, and the
+    // other side is a non-debt account. Linking corrects the direction.
+    const debtAcctIds = new Set(
+      (b.accounts || []).filter((a) => !a.archived && DEBT_ACCOUNT_TYPES.includes(a.type)).map((a) => a.id)
+    );
+    const marker = /payment|pymt|autopay|thank you|credit card/i;
+    const cardOuts = eligible.filter((t) =>
+      t.direction === 'outflow' && debtAcctIds.has(t.accountId) && marker.test(t.merchant || '')
+    );
+    eligible.filter((t) => t.direction === 'outflow' && !debtAcctIds.has(t.accountId)).forEach((out) => {
+      if (used.has(out.id)) return;
+      let best = null;
+      let bestGap = Infinity;
+      cardOuts.forEach((co) => {
+        if (used.has(co.id) || co.accountId === out.accountId) return;
+        if (co.amountCents !== out.amountCents) return;
+        if (dismissed.has(transferSuggestKey(out.id, co.id))) return;
+        const gap = Math.abs(daysBetween(out.date, co.date));
+        if (gap > WINDOW_DAYS || gap >= bestGap) return;
+        best = co; bestGap = gap;
+      });
+      if (best) { used.add(best.id); used.add(out.id); pairs.push({ out, inn: best, fixDirection: true }); }
     });
     return pairs;
   }
 
-  function linkAsTransferPair(outId, inId) {
+  function linkAsTransferPair(outId, inId, fixDirection) {
     global.Pike.state.commit((d) => {
       const txns = d.budget.transactions || [];
       const out = txns.find((t) => t.id === outId);
       const inn = txns.find((t) => t.id === inId);
       if (!out || !inn) return;
+      // Correct a feed-side sign error (card payments reported as outflows).
+      if (fixDirection) inn.direction = 'inflow';
       const destType = ((d.budget.accounts || []).find((a) => a.id === inn.accountId) || {}).type;
       const kind = DEBT_ACCOUNT_TYPES.includes(destType) ? 'debt-payment' : 'transfer';
       const now = new Date().toISOString();
@@ -1345,7 +1376,7 @@
       desc.textContent = 'These imported pairs look like two sides of one movement. Linking excludes them from spending and counts card payments as debt paid.';
       body.appendChild(desc);
 
-      pairs.forEach(({ out, inn }) => {
+      pairs.forEach(({ out, inn, fixDirection }) => {
         const destType = ((b.accounts || []).find((a) => a.id === inn.accountId) || {}).type;
         const isPayment = DEBT_ACCOUNT_TYPES.includes(destType);
 
@@ -1364,7 +1395,8 @@
         const sub = document.createElement('div');
         sub.style.fontSize = 'var(--fs-xs)';
         sub.style.color = 'var(--text-faint)';
-        sub.textContent = `${out.merchant || out.description || 'No description'} · ${inn.merchant || inn.description || 'No description'}`;
+        sub.textContent = `${out.merchant || out.description || 'No description'} · ${inn.merchant || inn.description || 'No description'}`
+          + (fixDirection ? ' · card-side direction will be corrected' : '');
         row.appendChild(sub);
 
         const btns = document.createElement('div');
@@ -1375,7 +1407,7 @@
         linkBtn.type = 'button';
         linkBtn.className = 'btn btn-primary btn-sm';
         linkBtn.textContent = isPayment ? 'Link as card payment' : 'Link as transfer';
-        linkBtn.addEventListener('click', () => { linkAsTransferPair(out.id, inn.id); renderList(); });
+        linkBtn.addEventListener('click', () => { linkAsTransferPair(out.id, inn.id, fixDirection); renderList(); });
 
         const skipBtn = document.createElement('button');
         skipBtn.type = 'button';
