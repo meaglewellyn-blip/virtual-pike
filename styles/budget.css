@@ -1461,3 +1461,19 @@
 .budget-upcoming-subhead:first-of-type {
   margin-top: 0;
 }
+
+/* ── Pending (unposted) imported transactions ──────────────────────────────── */
+
+.budget-tx-pill-pending {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  background: transparent;
+  margin-left: var(--space-2);
+  vertical-align: middle;
+  white-space: nowrap;
+}

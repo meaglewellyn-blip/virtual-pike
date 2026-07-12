@@ -435,22 +435,24 @@
       const existingIds = getExistingPlaidIds();
 
       // ── Classify added ──────────────────────────────────────────────────────
+      // Pending transactions import too (flagged plaidPending) — money already
+      // spoken for belongs in spending decisions. When they post, Plaid sends
+      // a remove for the pending id plus the settled transaction.
       const settledAdded    = added.filter((t) => !t.pending);
-      const pendingCount    = added.filter((t) => t.pending).length;
+      const pendingAdds     = added.filter((t) => t.pending && !existingIds.has(t.transaction_id) && accountMap[t.account_id]);
+      const pendingCount    = pendingAdds.length;
       const newTxns         = settledAdded.filter((t) => !existingIds.has(t.transaction_id) && accountMap[t.account_id]);
       const alreadyInPike   = settledAdded.filter((t) =>  existingIds.has(t.transaction_id)).length;
       const unmappedCount   = settledAdded.filter((t) => !existingIds.has(t.transaction_id) && !accountMap[t.account_id]).length;
 
       // ── Classify modified ───────────────────────────────────────────────────
-      // Settled modified already in Pike → update in place
-      const toUpdate = modified.filter((t) => !t.pending && existingIds.has(t.transaction_id));
-      // Settled modified NOT in Pike → was pending before first sync, now settled → add
-      const newFromModified = modified.filter((t) => !t.pending && !existingIds.has(t.transaction_id) && accountMap[t.account_id]);
+      const toUpdate = modified.filter((t) => existingIds.has(t.transaction_id));
+      const newFromModified = modified.filter((t) => !existingIds.has(t.transaction_id) && accountMap[t.account_id]);
 
       // ── Classify removed ────────────────────────────────────────────────────
       const toRemoveIds = (removed || []).map((t) => t.transaction_id).filter((id) => existingIds.has(id));
 
-      const allToAdd = [...newTxns, ...newFromModified];
+      const allToAdd = [...newTxns, ...newFromModified, ...pendingAdds];
 
       const previewEl = buildSyncPreview({
         allToAdd, toUpdate, toRemoveIds, pendingCount, alreadyInPike, unmappedCount, accountMap, mappedAccounts,
@@ -674,7 +676,7 @@
           createdAt:          now,
           updatedAt:          now,
           plaidTransactionId: t.transaction_id,
-          plaidPending:       false,
+          plaidPending:       !!t.pending,
         });
       });
 
@@ -689,7 +691,7 @@
         d.budget.transactions[idx].date         = t.date;
         d.budget.transactions[idx].merchant     = t.merchant_name || t.name || d.budget.transactions[idx].merchant;
         d.budget.transactions[idx].description  = t.name || d.budget.transactions[idx].description;
-        d.budget.transactions[idx].plaidPending = false;
+        d.budget.transactions[idx].plaidPending = !!t.pending;
         d.budget.transactions[idx].updatedAt    = now;
       });
 
@@ -738,6 +740,14 @@
     eyebrow.className   = 'budget-eyebrow';
     eyebrow.textContent = 'Connected banks';
     header.appendChild(eyebrow);
+
+    const syncBtn = document.createElement('button');
+    syncBtn.type        = 'button';
+    syncBtn.className   = 'btn btn-ghost btn-sm';
+    syncBtn.textContent = syncingNow ? 'Syncing…' : 'Sync now';
+    syncBtn.disabled    = syncingNow || connecting;
+    syncBtn.addEventListener('click', syncAllNow);
+    header.appendChild(syncBtn);
 
     const connectBtn = document.createElement('button');
     connectBtn.type        = 'button';
@@ -981,10 +991,10 @@
     mappedAccounts.forEach((a) => { if (a.plaidAccountId) accountMap[a.plaidAccountId] = a.id; });
     const existingIds = getExistingPlaidIds();
 
-    const settledAdded    = added.filter((t) => !t.pending);
-    const newTxns         = settledAdded.filter((t) => !existingIds.has(t.transaction_id) && accountMap[t.account_id]);
-    const toUpdate        = modified.filter((t) => !t.pending && existingIds.has(t.transaction_id));
-    const newFromModified = modified.filter((t) => !t.pending && !existingIds.has(t.transaction_id) && accountMap[t.account_id]);
+    // Pending included (flagged plaidPending) — see the manual flow's note.
+    const newTxns         = added.filter((t) => !existingIds.has(t.transaction_id) && accountMap[t.account_id]);
+    const toUpdate        = modified.filter((t) => existingIds.has(t.transaction_id));
+    const newFromModified = modified.filter((t) => !existingIds.has(t.transaction_id) && accountMap[t.account_id]);
     const toRemoveIds     = removed.map((t) => t.transaction_id).filter((id) => existingIds.has(id));
     const allToAdd        = [...newTxns, ...newFromModified];
 
@@ -999,11 +1009,11 @@
     return { added: allToAdd.length, updated: toUpdate.length, removed: toRemoveIds.length };
   }
 
-  async function maybeAutoSync() {
+  async function maybeAutoSync(force) {
     if (!connectedItems.length) return;
     let last = 0;
     try { last = Number(localStorage.getItem(AUTO_SYNC_KEY) || 0); } catch (_) {}
-    if (Date.now() - last < AUTO_SYNC_INTERVAL_MS) return;
+    if (!force && Date.now() - last < AUTO_SYNC_INTERVAL_MS) return;
     // Stamp BEFORE running so an error can't cause a retry loop on every render.
     try { localStorage.setItem(AUTO_SYNC_KEY, String(Date.now())); } catch (_) {}
 
@@ -1020,10 +1030,27 @@
       const bits = [`${added} imported`];
       if (updated) bits.push(`${updated} updated`);
       if (removed) bits.push(`${removed} removed`);
-      autoSyncSummary = `Auto-sync just now · ${bits.join(' · ')}`;
+      autoSyncSummary = `Synced just now · ${bits.join(' · ')}`;
       await fetchPreview();
       render();
       if (Pike.budget && Pike.budget.render) Pike.budget.render();
+    } else if (force) {
+      autoSyncSummary = 'Synced just now · nothing new from your banks';
+      render();
+    }
+  }
+
+  // Manual "Sync now" — same pipeline, throttle bypassed.
+  let syncingNow = false;
+  async function syncAllNow() {
+    if (syncingNow || connecting) return;
+    syncingNow = true;
+    render();
+    try {
+      await maybeAutoSync(true);
+    } finally {
+      syncingNow = false;
+      render();
     }
   }
 

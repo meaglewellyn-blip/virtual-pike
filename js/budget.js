@@ -107,7 +107,8 @@
   let txAccountFilter  = '';           // accountId or '' (all)
   let txCategoryFilter = '';           // categoryId, 'none', or '' (all)
   let txScopeFilter    = '';           // '', 'period:<id>', 'month:YYYY-MM'
-  let txSort           = 'date-desc';  // 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'
+  let txSort           = 'date-desc';  // 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc' | 'merchant-asc'
+  let txShowAll        = false;        // list renders capped until "Show all" — big lists jank mobile
   // Dashboard scope — period or calendar month. Device-local preference, not
   // synced state; semi-monthly periods tile months exactly so both views are
   // pure date math over the same transactions.
@@ -690,6 +691,7 @@
     txCategoryFilter = '';
     txScopeFilter = '';
     txSort = 'date-desc';
+    txShowAll = false;
     selectedTxnIds = new Set();
     activePeriodId = null;
     render();
@@ -705,6 +707,7 @@
     txCategoryFilter = categoryId || '';
     txScopeFilter = scopeValue || '';
     txSort = 'date-desc';
+    txShowAll = false;
     selectedTxnIds = new Set();
     activePeriodId = null;
     render();
@@ -3096,7 +3099,7 @@
           const n = el.value.length;
           try { el.setSelectionRange(n, n); } catch (_) {}
         }
-      }, 200);
+      }, 400);
     });
     searchWrap.appendChild(searchInput);
     wrap.appendChild(searchWrap);
@@ -3196,9 +3199,17 @@
       visible = visible.filter((t) => t.accountId === txAccountFilter);
     }
     if (txCategoryFilter) {
+      // Linked payment/transfer pairs carry kind but no categoryId — filtering
+      // by the Debt payment category should still surface kind-based debt
+      // payments (and Transfer likewise), or half the payments go invisible.
+      const selCat = (b.categories || []).find((c) => c.id === txCategoryFilter);
+      const includeDebtKind = selCat && selCat.group === 'debt' && !selCat.excludeFromSpending;
+      const includeTransferKind = selCat && selCat.group === 'transfer';
       visible = visible.filter((t) =>
         t.categoryId === txCategoryFilter ||
-        (Array.isArray(t.splits) && t.splits.some((s) => s.categoryId === txCategoryFilter))
+        (Array.isArray(t.splits) && t.splits.some((s) => s.categoryId === txCategoryFilter)) ||
+        (includeDebtKind && t.kind === 'debt-payment') ||
+        (includeTransferKind && t.kind === 'transfer')
       );
     }
     if (txScopeFilter.startsWith('month:')) {
@@ -3269,10 +3280,24 @@
       return (b2.createdAt || '').localeCompare(a.createdAt || '');
     });
 
+    // Render capped — rebuilding 700 DOM rows on every keystroke is what made
+    // mobile search feel frozen. "Show all" opts into the full list.
+    const CAP = 120;
+    const toRender = txShowAll ? visible : visible.slice(0, CAP);
     const list = document.createElement('div');
     list.className = 'budget-list';
-    visible.forEach((t) => list.appendChild(buildTransactionRow(t)));
+    toRender.forEach((t) => list.appendChild(buildTransactionRow(t)));
     wrap.appendChild(list);
+    if (!txShowAll && visible.length > CAP) {
+      const moreBtn = document.createElement('button');
+      moreBtn.type = 'button';
+      moreBtn.className = 'btn btn-ghost btn-sm';
+      moreBtn.style.alignSelf = 'center';
+      moreBtn.style.marginTop = 'var(--space-3)';
+      moreBtn.textContent = `Show all ${visible.length}`;
+      moreBtn.addEventListener('click', () => { txShowAll = true; render(); });
+      wrap.appendChild(moreBtn);
+    }
     return wrap;
   }
 
@@ -3319,6 +3344,12 @@
       recPill.className = 'budget-tx-pill-recurring';
       recPill.textContent = 'Recurring';
       name.appendChild(recPill);
+    }
+    if (tx.plaidPending) {
+      const pendPill = document.createElement('span');
+      pendPill.className = 'budget-tx-pill-pending';
+      pendPill.textContent = 'Pending';
+      name.appendChild(pendPill);
     }
     main.appendChild(name);
 

@@ -243,6 +243,22 @@ serve(async (req: Request) => {
       return json({ ok: true });
     }
 
+    // ── reset-cursor ───────────────────────────────────────────────────────────
+    // Clears an item's sync cursor so the next sync re-delivers full history.
+    // Safe: the frontend dedupes by plaidTransactionId. Used to backfill
+    // pending transactions that predate pending-import support.
+    if (action === 'reset-cursor') {
+      const body = await req.json();
+      const { item_id } = body;
+      if (!item_id) return json({ error: 'item_id required' }, 400);
+
+      await db.from('plaid_tokens')
+        .update({ cursor: null, updated_at: new Date().toISOString() })
+        .eq('id', item_id);
+
+      return json({ ok: true });
+    }
+
     // ── disconnect ─────────────────────────────────────────────────────────────
     // Revokes the Plaid item and removes the token from storage.
     if (action === 'disconnect') {
