@@ -1405,3 +1405,34 @@
 .budget-savings-bar-fill {
   background: var(--success, #7d9471);
 }
+
+/* ── Drill-down card stats ─────────────────────────────────────────────────── */
+
+.budget-card-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-top: var(--space-3);
+}
+
+.budget-card-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.budget-card-stat-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-md, 16px);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.budget-card-stat-label {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}

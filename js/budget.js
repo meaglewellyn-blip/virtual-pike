@@ -1158,33 +1158,50 @@
     blurb.className = 'budget-card-blurb';
     blurb.textContent = view.blurb;
 
-    const status = document.createElement('span');
-    status.className = 'budget-card-status';
-    status.textContent = cardStatus(view.id);
+    const stats = document.createElement('div');
+    stats.className = 'budget-card-stats';
+    cardStats(view.id).forEach(({ value, label }) => {
+      const stat = document.createElement('div');
+      stat.className = 'budget-card-stat';
+      const v = document.createElement('span');
+      v.className = 'budget-card-stat-value';
+      v.textContent = value;
+      const l = document.createElement('span');
+      l.className = 'budget-card-stat-label';
+      l.textContent = label;
+      stat.appendChild(v);
+      stat.appendChild(l);
+      stats.appendChild(stat);
+    });
 
     card.appendChild(title);
     card.appendChild(blurb);
-    card.appendChild(status);
+    card.appendChild(stats);
 
     card.addEventListener('click', () => gotoView(view.id));
     return card;
   }
 
-  function cardStatus(viewId) {
+  // One or two {value, label} stats per drill-down card — value on top in
+  // mono, quiet label beneath. Replaces the old single cramped status line.
+  function cardStats(viewId) {
     const b = getBudget();
-    if (!b) return '';
+    if (!b) return [];
     if (viewId === 'accounts') {
       const accs = (b.accounts || []).filter((a) => !a.archived);
-      if (!accs.length) return 'No accounts yet';
+      if (!accs.length) return [{ value: '—', label: 'no accounts yet' }];
       const total = accs.reduce((sum, a) => sum + accountBalance(a), 0);
-      return `${formatCents(total)} · ${accs.length} ${accs.length === 1 ? 'account' : 'accounts'}`;
+      return [
+        { value: formatCents(total), label: 'net worth on file' },
+        { value: String(accs.length), label: accs.length === 1 ? 'account' : 'accounts' },
+      ];
     }
     if (viewId === 'debts') {
       const debts = (b.debts || []);
       const debtAccounts = (b.accounts || []).filter(
         (a) => !a.archived && DEBT_ACCOUNT_TYPES.includes(a.type)
       );
-      if (!debtAccounts.length && !debts.length) return 'No debts tracked';
+      if (!debtAccounts.length && !debts.length) return [{ value: '—', label: 'no debts tracked' }];
       const owed = debtAccounts.reduce((sum, a) => {
         const dbt = debts.find((d) => d.accountId === a.id);
         const amort = dbt ? amortizedDebtStatus(dbt) : null;
@@ -1192,35 +1209,52 @@
       }, 0);
       const period = activePeriod();
       const paid = period ? debtPaidThisPeriodCents(period) : 0;
-      const n = debtAccounts.length;
-      return paid > 0
-        ? `${formatCents(owed)} owed · ${formatCents(paid)} paid this period`
-        : `${formatCents(owed)} owed · ${n} ${n === 1 ? 'account' : 'accounts'}`;
+      const stats = [{ value: formatCents(owed), label: 'owed' }];
+      if (paid > 0) stats.push({ value: formatCents(paid), label: 'paid this period' });
+      else stats.push({ value: String(debtAccounts.length), label: debtAccounts.length === 1 ? 'account' : 'accounts' });
+      return stats;
     }
     if (viewId === 'payperiods') {
       const period = activePeriod();
       const total = (b.payPeriods || []).length;
-      if (!total) return 'No pay periods yet';
-      if (period) return `${period.label} · ${total} total`;
-      return `${total} ${total === 1 ? 'period' : 'periods'}`;
+      if (!total) return [{ value: '—', label: 'no pay periods yet' }];
+      const stats = [];
+      if (period) stats.push({ value: period.label, label: 'active now' });
+      stats.push({ value: String(total), label: 'total' });
+      return stats;
     }
     if (viewId === 'transactions') {
       const period = activePeriod();
       const txns = (b.transactions || []).filter((t) => !t.plaidRemoved);
-      if (!txns.length) return 'No transactions yet';
-      if (!period) return `${txns.length} ${txns.length === 1 ? 'transaction' : 'transactions'}`;
-      const inPeriod = txns.filter((t) => t.date >= period.startDate && t.date <= period.endDate).length;
-      return `${inPeriod} this period`;
+      if (!txns.length) return [{ value: '—', label: 'no transactions yet' }];
+      const stats = [];
+      if (period) {
+        const inPeriod = txns.filter((t) => t.date >= period.startDate && t.date <= period.endDate).length;
+        stats.push({ value: String(inPeriod), label: 'this period' });
+      } else {
+        stats.push({ value: String(txns.length), label: 'total' });
+      }
+      const uncat = txns.filter((t) =>
+        t.kind !== 'transfer' && t.kind !== 'debt-payment' &&
+        !t.categoryId && !(Array.isArray(t.splits) && t.splits.length)
+      ).length;
+      if (uncat > 0) stats.push({ value: String(uncat), label: 'uncategorized' });
+      return stats;
     }
     if (viewId === 'recurring') {
-      const bills = (b.recurringBills || []).filter((r) => !r.archived);
-      if (!bills.length) return 'No recurring yet';
+      const today = todayKey();
+      const bills = (b.recurringBills || []).filter(
+        (r) => !r.archived && (!r.endDate || r.endDate >= today)
+      );
+      if (!bills.length) return [{ value: '—', label: 'no recurring yet' }];
       const upcomingCount = bills.reduce((n, bill) => n + upcomingOccurrences(bill, 14).length, 0);
-      return upcomingCount > 0
-        ? `${upcomingCount} upcoming in 14 days`
-        : `${bills.length} ${bills.length === 1 ? 'bill' : 'bills'}`;
+      const monthly = bills.reduce((n, bill) => n + monthlyCentsForBill(bill), 0);
+      return [
+        { value: `${formatCents(monthly, { hideCents: true })}/mo`, label: 'committed' },
+        { value: String(upcomingCount), label: 'due in 14 days' },
+      ];
     }
-    return 'Coming next';
+    return [];
   }
 
   function buildTopCategoriesCard() {
