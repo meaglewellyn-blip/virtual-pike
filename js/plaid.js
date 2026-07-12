@@ -902,7 +902,13 @@
         const txnList = document.createElement('div');
         txnList.className = 'plaid-txn-list';
 
-        txnData.added.slice(0, 5).forEach((t) => {
+        // The preview endpoint returns Plaid's FIRST sync page — the oldest
+        // history. Sort newest-first so "recent" is honest.
+        txnData.added
+          .slice()
+          .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+          .slice(0, 5)
+          .forEach((t) => {
           const mapped = mapTransaction(t);
           const row    = document.createElement('div');
           row.className = 'plaid-txn-row';
