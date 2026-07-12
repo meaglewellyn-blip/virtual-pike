@@ -3627,9 +3627,11 @@
     const kindOption = TX_KIND_OPTIONS.find((k) => k.id === initialKind) || TX_KIND_OPTIONS[0];
     const initialDirection = (isEdit ? tx.direction : kindOption.direction);
 
-    // Categories filter for spending vs income/refund
+    // Categories filter by kind. Income earns into income categories, but
+    // refunds/reimbursements net against SPENDING categories — a Venmo
+    // repayment for a group dinner belongs in Eating out, subtracting there.
     function categoriesForKind(kind) {
-      if (kind === 'income' || kind === 'refund') {
+      if (kind === 'income') {
         return allCategories.filter((c) => c.group === 'income');
       }
       return allCategories.filter((c) => c.group !== 'income' && c.group !== 'transfer');
