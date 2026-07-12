@@ -86,6 +86,15 @@
         pushTimer = null;
         push(global.Pike.state.data);
       }
+      // Coming BACK to the foreground: a resumed PWA holds frozen in-memory
+      // state, its realtime socket is often dead, and its next commit would
+      // push that stale snapshot over everything newer (the 2026-07-12
+      // morning wipe). Pull first — pullOnce() is a no-op when the remote
+      // row isn't newer, so this is cheap on every wake.
+      if (!document.hidden) pullOnce();
+    });
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted) pullOnce();  // bfcache restore = same stale-resume risk
     });
     window.addEventListener('pagehide', () => {
       if (pushTimer) {
@@ -167,6 +176,9 @@
           const sinceLocal = Date.now() - (global.Pike.state.lastLocalCommitAt || 0);
           if (sinceLocal < REALTIME_IGNORE_AFTER_LOCAL_COMMIT_MS) return;
           global.Pike.state.replace(payload.new.data);
+          // Advance the freshness marker — this device is now current, so the
+          // push guard below must not refuse its next push.
+          try { if (payload.new.updated_at) localStorage.setItem(SYNC_KEY, payload.new.updated_at); } catch (_) {}
         })
       .subscribe();
   }
@@ -199,6 +211,31 @@
 
     setMode('syncing');
     const rowId = global.Pike.state.rowId;
+
+    // ── Freshness guard ───────────────────────────────────────────────────
+    // Every push writes the WHOLE blob. If the remote row changed since this
+    // device last synced, pushing would silently erase those changes (the
+    // repeated stale-device wipes of 2026-07-11/12). Refuse and pull instead —
+    // the cost is redoing one local edit; the alternative is losing a day.
+    try {
+      let lastAt = '';
+      try { lastAt = localStorage.getItem(SYNC_KEY) || ''; } catch (_) {}
+      if (lastAt) {
+        const { data: head } = await client
+          .from('app_state')
+          .select('updated_at')
+          .eq('id', rowId)
+          .maybeSingle();
+        if (head && head.updated_at && head.updated_at > lastAt) {
+          console.warn('Pike[telemetry]: push-refused — remote row is newer than this device\'s last sync. Pulling fresh state; redo the last edit if it disappears.');
+          document.dispatchEvent(new CustomEvent('pike:push-refused', { detail: { reasons: ['remote-newer-than-local-sync'] } }));
+          setMode('online');
+          await pullOnce();
+          return;
+        }
+      }
+    } catch (_) { /* offline or transient — the upsert below will surface it */ }
+
     const serialized = JSON.stringify(data);
     const pushedAt = new Date().toISOString();
     try {
