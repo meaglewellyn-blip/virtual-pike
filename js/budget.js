@@ -668,6 +668,20 @@
     return !!(global.Pike.router && global.Pike.router.currentSection() === 'budget');
   }
 
+  // Scroll to the top whenever the rendered view IDENTITY changes — entering
+  // a view mid-scroll is disorienting. Same-view re-renders (search typing,
+  // checkbox ticks) must never jump, so this keys off the view, not render().
+  let lastRenderedViewKey = null;
+  function scrollToTopOnViewChange() {
+    const key = `${activeView || 'dashboard'}:${activePeriodId || ''}`;
+    if (key === lastRenderedViewKey) return;
+    lastRenderedViewKey = key;
+    try { window.scrollTo(0, 0); } catch (_) {}
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+    const main = document.querySelector('.app-main');
+    if (main) main.scrollTop = 0;
+  }
+
   function render() {
     if (!isActiveSection()) return;
     const contentEl = document.getElementById('budget-content');
@@ -678,6 +692,7 @@
     } else {
       contentEl.appendChild(buildFocusedView(activeView));
     }
+    scrollToTopOnViewChange();
     // After the DOM is ready, let plaid.js populate the connected-banks slot
     // (only visible when the Accounts focused view is active).
     if (global.Pike && global.Pike.plaid) global.Pike.plaid.render();
