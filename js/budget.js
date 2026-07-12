@@ -1354,15 +1354,30 @@
   }
 
   function buildUpcomingBillsTile() {
-    const bills = (getBudget().recurringBills || []).filter((r) => !r.archived);
+    const b = getBudget();
+    const bills = (b.recurringBills || []).filter((r) => !r.archived);
+    const today = todayKey();
+
+    // Horizon: the rest of the current period plus the entire next one, so
+    // each section shows a complete picture with its own still-to-come total.
+    // Without periods, fall back to a flat 14-day window.
+    const period = activePeriod();
+    const nextPeriod = period
+      ? (b.payPeriods || []).slice().sort((x, y) => x.startDate.localeCompare(y.startDate))
+          .find((p) => p.startDate > period.endDate)
+      : null;
+    const horizonDate = nextPeriod ? nextPeriod.endDate : (period ? period.endDate : addDaysIso(today, 14));
+    const days = Math.max(1, daysBetween(today, horizonDate));
+
     const occurrences = [];
     bills.forEach((bill) => {
-      upcomingOccurrences(bill, 14).forEach((dateStr) => {
+      upcomingOccurrences(bill, days).forEach((dateStr) => {
+        if (dateStr > horizonDate) return;
         occurrences.push({ bill, date: dateStr });
       });
     });
     if (!occurrences.length) return null;
-    occurrences.sort((a, b) => a.date.localeCompare(b.date));
+    occurrences.sort((a, b2) => a.date.localeCompare(b2.date));
 
     const tile = document.createElement('section');
     tile.className = 'budget-upcoming';
@@ -1371,12 +1386,39 @@
     title.textContent = 'Upcoming bills';
     tile.appendChild(title);
 
-    const list = document.createElement('div');
-    list.className = 'budget-upcoming-list';
-    occurrences.forEach(({ bill, date }) => {
-      list.appendChild(buildUpcomingRow(bill, date));
+    const groups = period
+      ? [
+          { label: `This period · through ${fmtDateShort(period.endDate)}`,
+            items: occurrences.filter((o) => o.date <= period.endDate) },
+          { label: nextPeriod
+              ? `Next period · ${fmtDateShort(nextPeriod.startDate)} – ${fmtDateShort(nextPeriod.endDate)}`
+              : 'Beyond this period',
+            items: occurrences.filter((o) => o.date > period.endDate) },
+        ]
+      : [{ label: 'Next 14 days', items: occurrences }];
+
+    groups.forEach((group) => {
+      if (!group.items.length) return;
+      const toCome = group.items.reduce(
+        (sum, { bill, date }) => sum + (occurrencePaidTxn(bill, date) ? 0 : (bill.amountCents || 0)), 0
+      );
+      const subhead = document.createElement('div');
+      subhead.className = 'budget-upcoming-subhead';
+      const lbl = document.createElement('span');
+      lbl.textContent = group.label;
+      const amt = document.createElement('span');
+      amt.textContent = toCome > 0 ? `≈${formatCents(toCome)} to come` : 'all paid ✓';
+      subhead.appendChild(lbl);
+      subhead.appendChild(amt);
+      tile.appendChild(subhead);
+
+      const list = document.createElement('div');
+      list.className = 'budget-upcoming-list';
+      group.items.forEach(({ bill, date }) => {
+        list.appendChild(buildUpcomingRow(bill, date));
+      });
+      tile.appendChild(list);
     });
-    tile.appendChild(list);
     return tile;
   }
 

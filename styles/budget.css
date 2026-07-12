@@ -1436,3 +1436,22 @@
   text-transform: uppercase;
   color: var(--text-faint);
 }
+
+/* ── Upcoming bills: period group subheads ─────────────────────────────────── */
+
+.budget-upcoming-subhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  font: var(--fw-medium) var(--fs-xs)/1 var(--font-body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-upcoming-subhead:first-of-type {
+  margin-top: 0;
+}
