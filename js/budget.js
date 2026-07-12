@@ -752,6 +752,10 @@
     const sweep = buildSweepCard();
     if (sweep) wrap.appendChild(sweep);
 
+    // Savings tracker — balance, saved-this-scope vs goal, one-tap top-up.
+    const savingsCard = buildSavingsCard();
+    if (savingsCard) wrap.appendChild(savingsCard);
+
     // Upcoming bills (only if any in next 14 days)
     const upcoming = buildUpcomingBillsTile();
     if (upcoming) wrap.appendChild(upcoming);
@@ -826,6 +830,125 @@
         });
       });
     return { count, totalCents };
+  }
+
+  // Net money moved INTO savings-type accounts during the scope window —
+  // transfer inflows minus withdrawals. Derived entirely from linked
+  // transfer legs; no stored aggregates.
+  function savedInPeriodCents(period) {
+    if (!period) return 0;
+    const b = getBudget();
+    const savingsIds = new Set(
+      (b.accounts || []).filter((a) => !a.archived && a.type === 'savings').map((a) => a.id)
+    );
+    if (!savingsIds.size) return 0;
+    return (b.transactions || []).reduce((sum, t) => {
+      if (t.plaidRemoved || t.kind !== 'transfer') return sum;
+      if (!savingsIds.has(t.accountId)) return sum;
+      if (t.date < period.startDate || t.date > period.endDate) return sum;
+      return sum + (t.direction === 'inflow' ? (t.amountCents || 0) : -(t.amountCents || 0));
+    }, 0);
+  }
+
+  function openSavingsGoalModal() {
+    const b = getBudget();
+    const current = (b.settings && b.settings.savingsGoalCents) || 0;
+    const form = document.createElement('form');
+    form.className = 'budget-form';
+    form.innerHTML = `
+      <label class="budget-field">
+        <span>Savings goal per pay period</span>
+        <input type="text" inputmode="decimal" class="input" name="goal" required
+               value="${esc(inputValueFromCents(current))}" placeholder="150.00">
+        <span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:400;">The Month view doubles this (two pay periods per month). Set to 0 to hide the goal bar.</span>
+      </label>
+      <div class="pike-modal-actions">
+        <button type="button" class="btn" data-modal-close="1">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save goal</button>
+      </div>
+    `;
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const goal = centsFromInput(String(new FormData(form).get('goal') || '0'));
+      global.Pike.state.commit((d) => {
+        if (!d.budget.settings) d.budget.settings = {};
+        d.budget.settings.savingsGoalCents = Math.max(0, goal);
+      });
+      global.Pike.modal.close();
+    });
+    global.Pike.modal.open({ title: 'Savings goal', body: form });
+  }
+
+  function buildSavingsCard() {
+    const b = getBudget();
+    const savings = (b.accounts || []).filter((a) => !a.archived && a.type === 'savings');
+    if (!savings.length) return null;
+    const period = dashScopePeriod();
+    if (!period) return null;
+
+    const scopeMult = dashScope === 'month' ? 2 : 1;
+    const goal = ((b.settings && b.settings.savingsGoalCents) || 0) * scopeMult;
+    const saved = savedInPeriodCents(period);
+    const balance = savings.reduce((s, a) => s + accountBalance(a), 0);
+
+    const card = document.createElement('section');
+    card.className = 'budget-sweep';
+
+    const head = document.createElement('div');
+    head.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-3);width:100%;';
+    const title = document.createElement('h3');
+    title.className = 'budget-sweep-title';
+    title.textContent = 'Savings';
+    head.appendChild(title);
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'budget-top-cats-viewall';
+    editBtn.textContent = 'Edit goal';
+    editBtn.addEventListener('click', openSavingsGoalModal);
+    head.appendChild(editBtn);
+    card.appendChild(head);
+
+    const line = document.createElement('p');
+    line.className = 'budget-sweep-line';
+    line.textContent = `${savings.length === 1 ? savings[0].name.replace(/\s*\.\.\..*$/, '') : 'Savings accounts'} hold${savings.length === 1 ? 's' : ''} ${formatCents(balance)}`;
+    card.appendChild(line);
+
+    const headline = document.createElement('p');
+    headline.className = 'budget-sweep-amount';
+    const scopeWord = dashScope === 'month' ? 'this month' : 'this period';
+    headline.textContent = goal > 0
+      ? `${formatCents(saved)} saved ${scopeWord} of ${formatCents(goal)} goal`
+      : `${formatCents(saved)} saved ${scopeWord}`;
+    card.appendChild(headline);
+
+    if (goal > 0) {
+      const bar = document.createElement('div');
+      bar.className = 'budget-pp-bar';
+      bar.style.width = '100%';
+      const fill = document.createElement('div');
+      fill.className = 'budget-pp-bar-fill budget-savings-bar-fill';
+      fill.style.width = Math.max(0, Math.min(100, Math.round((saved / goal) * 100))) + '%';
+      bar.appendChild(fill);
+      card.appendChild(bar);
+    }
+
+    if (goal > saved) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-ghost btn-sm';
+      btn.textContent = 'Log savings transfer';
+      const everyday = (b.accounts || []).find(
+        (a) => !a.archived && a.type === 'checking' && /everyday/i.test(a.name)
+      ) || (b.accounts || []).find((a) => !a.archived && a.type === 'checking');
+      btn.addEventListener('click', () => openTransferModal(null, {
+        fromAccountId: everyday ? everyday.id : '',
+        toAccountId: savings[0].id,
+        amountCents: goal - saved,
+        description: 'Savings commitment',
+      }));
+      card.appendChild(btn);
+    }
+    return card;
   }
 
   function buildSweepCard() {

@@ -1399,3 +1399,9 @@
   max-width: 420px;
   font-size: var(--fs-sm);
 }
+
+/* ── Savings tracker ───────────────────────────────────────────────────────── */
+
+.budget-savings-bar-fill {
+  background: var(--success, #7d9471);
+}
