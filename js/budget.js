@@ -1107,7 +1107,8 @@
 
     const b = getBudget();
     const categories = b.categories || [];
-    const catIds = categoriesWithSpendingInPeriod(period);
+    const excluded = excludedFromSpendingCatIds();
+    const catIds = [...categoriesWithSpendingInPeriod(period)].filter((id) => !excluded.has(id));
 
     // Compute net spent per category; keep only positive (net spend) entries.
     const rows = [];
