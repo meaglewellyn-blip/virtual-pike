@@ -807,11 +807,26 @@
       const bal = document.createElement('span');
       bal.className = 'budget-cg-balance';
       const cents = accountBalance(acc);
-      bal.textContent = formatCents(cents);
-      if (cents < 0) bal.classList.add('is-negative');
+      // Lead with the bank's own AVAILABLE balance when Plaid provides it —
+      // it includes authorized holds and in-process ACH the ledger can't see
+      // yet, so it's the honest "spendable right now" number. The derived
+      // ledger balance becomes the sub-line.
+      const live = (global.Pike.plaid && global.Pike.plaid.liveBalanceFor)
+        ? global.Pike.plaid.liveBalanceFor(acc.id) : null;
+      const showLive = live && live.availableCents != null;
+      const shown = showLive ? live.availableCents : cents;
+      bal.textContent = formatCents(shown);
+      if (shown < 0) bal.classList.add('is-negative');
       const state = document.createElement('span');
       state.className = 'budget-cg-state';
-      state.textContent = accountBalanceState(acc);
+      if (showLive) {
+        const at = live.fetchedAt
+          ? ` · ${live.fetchedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+          : '';
+        state.textContent = `bank available${at} · ledger ${formatCents(cents)}`;
+      } else {
+        state.textContent = accountBalanceState(acc);
+      }
       item.appendChild(name);
       item.appendChild(bal);
       item.appendChild(state);

@@ -25,6 +25,7 @@
   let connectedItems  = [];   // [{ id, institution_name, institution_id, created_at }]
   let previewAccounts = [];   // [{ item_id, institution, accounts }]
   let previewTxns     = [];   // [{ item_id, institution, added }]
+  let previewFetchedAt = null; // when previewAccounts/balances were last fetched
   let connecting      = false;
   let importingItemId = null; // item currently being fetched for import
   let lastError       = null; // user-visible message from the most recent Plaid failure
@@ -138,6 +139,7 @@
       ]);
       previewAccounts = (acctRes.results || []).filter((r) => !r.error);
       previewTxns     = (txnRes.results  || []).filter((r) => !r.error);
+      previewFetchedAt = new Date();
     } catch (e) {
       console.warn('Pike: plaid preview fetch failed', e);
     }
@@ -1042,7 +1044,11 @@
       if (Pike.budget && Pike.budget.render) Pike.budget.render();
     } else if (force) {
       autoSyncSummary = 'Synced just now · nothing new from your banks';
+      // Even with no transactions, refresh bank-reported balances so the
+      // checking glance's "available" is current after a manual sync.
+      await fetchPreview();
       render();
+      if (Pike.budget && Pike.budget.render) Pike.budget.render();
     }
   }
 
@@ -1060,12 +1066,37 @@
     }
   }
 
+  // Bank-reported balances for the budget UI. previewAccounts holds each
+  // institution's live accounts/get response; map a Pike account to its
+  // bank-reported available/current. Available is the bank's own spendable
+  // number — it includes authorized holds Pike's ledger can't see yet.
+  function liveBalanceFor(pikeAccountId) {
+    const pikeAcc = (getBudget().accounts || []).find((a) => a.id === pikeAccountId);
+    if (!pikeAcc || !pikeAcc.plaidAccountId) return null;
+    for (const r of previewAccounts) {
+      for (const a of (r.accounts || [])) {
+        if (a.account_id === pikeAcc.plaidAccountId) {
+          const bal = a.balances || {};
+          return {
+            availableCents: bal.available != null ? Math.round(bal.available * 100) : null,
+            currentCents:   bal.current   != null ? Math.round(bal.current * 100)   : null,
+            fetchedAt: previewFetchedAt,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
   async function init() {
     await refreshStatus();
     if (connectedItems.length) await fetchPreview();
     render();
+    // Bank-reported balances just arrived — refresh the budget dashboard so
+    // the checking glance picks them up (it renders before this completes).
+    if (Pike.budget && Pike.budget.render) Pike.budget.render();
     maybeAutoSync();  // background — not awaited
   }
 
-  Pike.plaid = { init, render, connect, disconnect, refreshStatus, fetchPreview };
+  Pike.plaid = { init, render, connect, disconnect, refreshStatus, fetchPreview, liveBalanceFor };
 })(window);
