@@ -243,6 +243,29 @@ serve(async (req: Request) => {
       return json({ ok: true });
     }
 
+    // ── refresh ────────────────────────────────────────────────────────────────
+    // Asks Plaid to fetch fresh data from the bank RIGHT NOW instead of
+    // waiting for its periodic background cycle — the Rocket Money trick.
+    // Fire-and-forget: Plaid ingests within ~seconds to a minute; the next
+    // sync then sees the new delta (including fresh pending transactions).
+    if (action === 'refresh') {
+      const body = await req.json();
+      const { item_id } = body;
+      if (!item_id) return json({ error: 'item_id required' }, 400);
+
+      const { data: token } = await db
+        .from('plaid_tokens')
+        .select('access_token')
+        .eq('id', item_id)
+        .single();
+
+      if (!token) return json({ error: 'item not found' }, 404);
+
+      const data = await plaidPost('/transactions/refresh', { access_token: token.access_token });
+      if (data.error_message) return json({ error: data.error_message }, 400);
+      return json({ ok: true });
+    }
+
     // ── reset-cursor ───────────────────────────────────────────────────────────
     // Clears an item's sync cursor so the next sync re-delivers full history.
     // Safe: the frontend dedupes by plaidTransactionId. Used to backfill

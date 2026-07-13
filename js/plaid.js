@@ -1052,13 +1052,25 @@
     }
   }
 
-  // Manual "Sync now" — same pipeline, throttle bypassed.
+  // Manual "Sync now" — asks Plaid to visit each bank RIGHT NOW (the same
+  // on-demand refresh Rocket Money uses), gives the banks a moment to answer,
+  // then pulls the delta. On an Edge deployment without the refresh action
+  // the request is a no-op and the sync still pulls whatever Plaid has.
   let syncingNow = false;
   async function syncAllNow() {
     if (syncingNow || connecting) return;
     syncingNow = true;
+    autoSyncSummary = 'Asking your banks for fresh data…';
     render();
     try {
+      const results = await Promise.all(connectedItems.map((item) =>
+        callEdge({ action: 'refresh' }, { item_id: item.id }).catch(() => null)
+      ));
+      const refreshed = results.filter((r) => r && r.ok).length;
+      if (refreshed > 0) {
+        // Plaid needs a beat to ingest from the banks before the delta exists.
+        await new Promise((resolve) => setTimeout(resolve, 15000));
+      }
       await maybeAutoSync(true);
     } finally {
       syncingNow = false;
