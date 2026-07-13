@@ -1025,6 +1025,17 @@
     // Stamp BEFORE running so an error can't cause a retry loop on every render.
     try { localStorage.setItem(AUTO_SYNC_KEY, String(Date.now())); } catch (_) {}
 
+    // Ask each bank for fresh data first (Plaid on-demand refresh), so the
+    // automatic on-open sync is as current as a manual one. The 6h throttle
+    // naturally caps refresh calls at a few rounds per day. No-op on Edge
+    // deployments without the action.
+    const refreshResults = await Promise.all(connectedItems.map((item) =>
+      callEdge({ action: 'refresh' }, { item_id: item.id }).catch(() => null)
+    ));
+    if (refreshResults.some((r) => r && r.ok)) {
+      await new Promise((resolve) => setTimeout(resolve, 15000));
+    }
+
     let added = 0, updated = 0, removed = 0;
     for (const item of connectedItems) {
       try {
@@ -1052,10 +1063,8 @@
     }
   }
 
-  // Manual "Sync now" — asks Plaid to visit each bank RIGHT NOW (the same
-  // on-demand refresh Rocket Money uses), gives the banks a moment to answer,
-  // then pulls the delta. On an Edge deployment without the refresh action
-  // the request is a no-op and the sync still pulls whatever Plaid has.
+  // Manual "Sync now" — the same refresh-then-pull cycle as the automatic
+  // on-open sync, with the throttle bypassed.
   let syncingNow = false;
   async function syncAllNow() {
     if (syncingNow || connecting) return;
@@ -1063,14 +1072,6 @@
     autoSyncSummary = 'Asking your banks for fresh data…';
     render();
     try {
-      const results = await Promise.all(connectedItems.map((item) =>
-        callEdge({ action: 'refresh' }, { item_id: item.id }).catch(() => null)
-      ));
-      const refreshed = results.filter((r) => r && r.ok).length;
-      if (refreshed > 0) {
-        // Plaid needs a beat to ingest from the banks before the delta exists.
-        await new Promise((resolve) => setTimeout(resolve, 15000));
-      }
       await maybeAutoSync(true);
     } finally {
       syncingNow = false;
