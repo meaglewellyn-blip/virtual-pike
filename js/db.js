@@ -26,6 +26,11 @@
   // comparison is authoritative: it comes from one clock (Supabase), not from
   // independent per-device wall clocks.
   const SYNC_KEY = 'pike.sync.last_at';
+  // Companion to SYNC_KEY: the updated_at of the state that was actually
+  // PERSISTED to localStorage. The boot pull may only be skipped when this
+  // matches the sync marker — a fresh marker over stale/poisoned local data
+  // (the 2026-07 reseed incidents) otherwise resurrects old state forever.
+  const LOCAL_DATA_AT_KEY = 'pike.local.data_at';
 
   let client = null;
   let pushTimer = null;
@@ -123,14 +128,17 @@
       if (data && data.data) {
         // Cross-device staleness guard using the server's updated_at timestamp.
         let lastAt = '';
+        let localDataAt = '';
         try { lastAt = localStorage.getItem(SYNC_KEY) || ''; } catch(_) {}
+        try { localDataAt = localStorage.getItem(LOCAL_DATA_AT_KEY) || ''; } catch(_) {}
         const remoteAt = data.updated_at || '';
-        if (lastAt && remoteAt && remoteAt <= lastAt) {
+        if (lastAt && remoteAt && remoteAt <= lastAt && localDataAt === lastAt) {
           console.info('Pike: pullOnce skipped — remote row not newer than last sync',
             { lastAt, remoteAt });
         } else {
           global.Pike.state.replace(data.data);
           try { localStorage.setItem(SYNC_KEY, remoteAt); } catch(_) {}
+          try { localStorage.setItem(LOCAL_DATA_AT_KEY, remoteAt); } catch(_) {}
         }
         // Either way we now have an authoritative-or-newer state in memory.
         // Seed the shrinkage baseline from what we just observed and signal
@@ -178,7 +186,12 @@
           global.Pike.state.replace(payload.new.data);
           // Advance the freshness marker — this device is now current, so the
           // push guard below must not refuse its next push.
-          try { if (payload.new.updated_at) localStorage.setItem(SYNC_KEY, payload.new.updated_at); } catch (_) {}
+          try {
+            if (payload.new.updated_at) {
+              localStorage.setItem(SYNC_KEY, payload.new.updated_at);
+              localStorage.setItem(LOCAL_DATA_AT_KEY, payload.new.updated_at);
+            }
+          } catch (_) {}
         })
       .subscribe();
   }
@@ -248,6 +261,7 @@
       // Advance the local sync marker so the next pullOnce() doesn't re-apply
       // our own data as if it were a foreign change.
       try { localStorage.setItem(SYNC_KEY, pushedAt); } catch(_) {}
+      try { localStorage.setItem(LOCAL_DATA_AT_KEY, pushedAt); } catch(_) {}
       // Refresh the shrinkage baseline so the next push compares against
       // what we just successfully pushed — not the pre-push snapshot.
       global.Pike.state.setBaselineSizes(global.Pike.state.getCurrentSizes(data));

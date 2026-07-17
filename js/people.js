@@ -127,6 +127,11 @@
     const data = global.Pike.state.data;
     if (!data.people || data.people.length === 0) {
       global.Pike.state.commit((d) => {
+        // Re-check at APPLY time — this queued seed runs AFTER hydration.
+        // Without the inner guard it replaced the real roster (contact logs,
+        // sobriety dates) with DEFAULT_PEOPLE on every fresh-storage boot —
+        // the root cause of the repeated 2026-07 people resets.
+        if (d.people && d.people.length > 0) return;
         d.people = DEFAULT_PEOPLE.map((p) => ({ ...p, contactLog: [] }));
       });
       return;

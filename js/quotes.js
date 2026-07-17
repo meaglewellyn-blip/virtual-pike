@@ -65,11 +65,16 @@
 
   function init() {
     const data = global.Pike.state.data;
-    if (!data.quotes || data.quotes.length === 0) {
-      global.Pike.state.commit((d) => {
-        d.quotes = DEFAULT_QUOTES.map((q) => ({ ...q, addedAt: new Date().toISOString() }));
-      });
-    }
+    if (data.quotes && data.quotes.length > 0) return;
+    global.Pike.state.commit((d) => {
+      // Re-check at APPLY time. This commit is queued by the hydration gate
+      // and runs AFTER the remote pull lands — deciding only on the
+      // pre-hydration (often empty) state made this seed OVERWRITE the real
+      // quotes with the 8 defaults on every fresh-storage boot. That was the
+      // root cause of the repeated 2026-07 "reset to 8 quotes" wipes.
+      if (d.quotes && d.quotes.length > 0) return;
+      d.quotes = DEFAULT_QUOTES.map((q) => ({ ...q, addedAt: new Date().toISOString() }));
+    });
   }
 
   // ── Session-based quote: pick once per browser session ─────────────────────
