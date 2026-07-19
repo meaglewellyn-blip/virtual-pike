@@ -1477,3 +1477,21 @@
   vertical-align: middle;
   white-space: nowrap;
 }
+
+/* ── Recurring summary: expandable bucket detail ───────────────────────────── */
+
+.budget-rec-summary-detail {
+  padding: var(--space-1) 0 var(--space-2) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.budget-rec-summary-bill {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}

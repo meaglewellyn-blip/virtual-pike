@@ -2732,6 +2732,41 @@
       });
     }
 
+    // Uncategorized spending in this period — surfaced here so triage is one
+    // tap away instead of hiding until the Transactions filter is remembered.
+    let uncatCents = 0;
+    let uncatCount = 0;
+    (getBudget().transactions || []).forEach((t) => {
+      if (t.plaidRemoved || t.transferPairId) return;
+      if (t.date < period.startDate || t.date > period.endDate) return;
+      if (t.kind === 'transfer' || t.kind === 'debt-payment') return;
+      if (t.categoryId || (Array.isArray(t.splits) && t.splits.length)) return;
+      if (t.kind === 'spending' && t.direction === 'outflow') { uncatCents += t.amountCents || 0; uncatCount += 1; }
+      else if (t.kind === 'refund' && t.direction === 'inflow') { uncatCents -= t.amountCents || 0; uncatCount += 1; }
+    });
+    if (uncatCount > 0) {
+      const row = document.createElement('div');
+      row.className = 'budget-cat-row is-unallocated is-clickable';
+      row.title = 'View and categorize these transactions';
+      const head = document.createElement('div');
+      head.className = 'budget-cat-row-head';
+      const name = document.createElement('span');
+      name.className = 'budget-cat-name';
+      name.textContent = 'Uncategorized';
+      const status = document.createElement('span');
+      status.className = 'budget-cat-status is-over';
+      status.textContent = `${formatCents(uncatCents)} across ${uncatCount} · tap to triage`;
+      head.appendChild(name);
+      head.appendChild(status);
+      row.appendChild(head);
+      row.addEventListener('click', () => {
+        gotoTransactionsFiltered(null, 'period:' + period.id);
+        txFilter = 'uncategorized';
+        render();
+      });
+      list.appendChild(row);
+    }
+
     wrap.appendChild(list);
     return wrap;
   }
@@ -4575,9 +4610,10 @@
       const key = bill.endDate
         ? 'Installments (BNPL)'
         : ((cats.find((c) => c.id === bill.categoryId) || {}).name || 'Uncategorized');
-      if (!buckets[key]) buckets[key] = { count: 0, monthlyCents: 0 };
+      if (!buckets[key]) buckets[key] = { count: 0, monthlyCents: 0, bills: [] };
       buckets[key].count += 1;
       buckets[key].monthlyCents += monthlyCentsForBill(bill);
+      buckets[key].bills.push({ name: bill.name, monthlyCents: monthlyCentsForBill(bill) });
     });
     const rows = Object.entries(buckets).sort((a, b2) => b2[1].monthlyCents - a[1].monthlyCents);
     const totalCents = rows.reduce((s, [, v]) => s + v.monthlyCents, 0);
@@ -4601,10 +4637,10 @@
     list.className = 'budget-top-cats-list';
     rows.forEach(([name, v]) => {
       const row = document.createElement('div');
-      row.className = 'budget-top-cats-row';
+      row.className = 'budget-top-cats-row is-clickable';
       const nameEl = document.createElement('span');
       nameEl.className = 'budget-top-cats-name';
-      nameEl.textContent = name;
+      nameEl.textContent = `▸ ${name}`;
       const right = document.createElement('div');
       right.className = 'budget-top-cats-right';
       const amt = document.createElement('span');
@@ -4618,6 +4654,31 @@
       row.appendChild(nameEl);
       row.appendChild(right);
       list.appendChild(row);
+
+      // Expandable: click the bucket to see exactly which bills compose it,
+      // each normalized to per-month. Pure DOM toggle — no re-render.
+      const detail = document.createElement('div');
+      detail.className = 'budget-rec-summary-detail';
+      detail.hidden = true;
+      detail.style.display = 'none';
+      v.bills.sort((x, y) => y.monthlyCents - x.monthlyCents).forEach((bl) => {
+        const li = document.createElement('div');
+        li.className = 'budget-rec-summary-bill';
+        const n = document.createElement('span');
+        n.textContent = bl.name;
+        const m = document.createElement('span');
+        m.textContent = `${formatCents(bl.monthlyCents)}/mo`;
+        li.appendChild(n);
+        li.appendChild(m);
+        detail.appendChild(li);
+      });
+      list.appendChild(detail);
+      row.addEventListener('click', () => {
+        const open = detail.hidden;
+        detail.hidden = !open;
+        detail.style.display = open ? '' : 'none';
+        nameEl.textContent = `${open ? '▾' : '▸'} ${name}`;
+      });
     });
     card.appendChild(list);
     return card;
