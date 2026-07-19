@@ -1531,3 +1531,131 @@
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Debt payoff planner ───────────────────────────────────────────────────── */
+
+.budget-payoff {
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.budget-payoff-extra {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.budget-payoff-extra .input {
+  width: 110px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Category trends ───────────────────────────────────────────────────────── */
+
+.budget-trends-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.budget-trends-grid {
+  display: grid;
+  column-gap: var(--space-3);
+  align-items: end;
+  min-width: 560px;
+}
+
+.budget-trends-head {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  text-align: right;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.budget-trends-head.is-name {
+  text-align: left;
+}
+
+.budget-trends-name {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+.budget-trends-cell {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line-soft);
+  padding: var(--space-2) 0;
+  margin: 0;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  align-self: stretch;
+  justify-content: center;
+}
+
+button.budget-trends-cell {
+  cursor: pointer;
+}
+
+button.budget-trends-cell:hover .budget-trends-amt {
+  color: var(--accent-strong);
+}
+
+.budget-trends-amt {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.budget-trends-amt.is-zero {
+  color: var(--text-faint);
+  font-weight: var(--fw-regular);
+}
+
+.budget-trends-bar {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--sage);
+  opacity: 0.55;
+}
+
+.budget-trends-name.is-total,
+.budget-trends-cell.is-total {
+  border-bottom: none;
+  border-top: 1px solid var(--line);
+}
+
+.budget-trends-name.is-total {
+  font-weight: var(--fw-semibold);
+}
+
+.budget-trends-cell.is-total .budget-trends-amt {
+  font-weight: var(--fw-semibold);
+}
+
+.budget-trends-hint {
+  margin-top: var(--space-3);
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}

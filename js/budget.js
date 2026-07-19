@@ -551,6 +551,356 @@
     return [timeLabel, paidBits].filter(Boolean).join(' · ');
   }
 
+  // ── Debt payoff planner ──────────────────────────────────────────────────────
+  // Simulates paying every debt to zero: interest accrues monthly (APR/12),
+  // minimums get paid everywhere, and the extra budget — plus every minimum
+  // freed by a finished debt — attacks one target at a time. Avalanche kills
+  // the highest APR first (mathematically optimal); snowball kills the
+  // smallest balance first (motivationally optimal). Pure function.
+  function simulatePayoff(debtsIn, extraCents, strategy) {
+    const debts = debtsIn.map((d) => ({ ...d, bal: d.balanceCents, payoffMonth: null }));
+    const order = debts.slice().sort((a, b2) => strategy === 'snowball'
+      ? a.bal - b2.bal
+      : b2.aprBps - a.aprBps);
+    let month = 0;
+    let totalInterest = 0;
+    while (debts.some((d) => d.bal > 0) && month < 600) {
+      month++;
+      let attack = extraCents;
+      debts.forEach((d) => {
+        if (d.bal <= 0) { attack += d.minCents; return; }
+        const interest = Math.round(d.bal * (d.aprBps / 10000) / 12);
+        d.bal += interest;
+        totalInterest += interest;
+        const pay = Math.min(d.bal, d.minCents);
+        d.bal -= pay;
+      });
+      for (const target of order) {
+        if (attack <= 0) break;
+        if (target.bal <= 0) continue;
+        const pay = Math.min(target.bal, attack);
+        target.bal -= pay;
+        attack -= pay;
+      }
+      debts.forEach((d) => { if (d.bal <= 0 && d.payoffMonth == null) d.payoffMonth = month; });
+    }
+    return {
+      months: month,
+      totalInterestCents: totalInterest,
+      perDebt: order.map((d) => ({
+        name: d.name, aprBps: d.aprBps,
+        startCents: d.balanceCents, payoffMonth: d.payoffMonth,
+      })),
+      finished: !debts.some((d) => d.bal > 0),
+    };
+  }
+
+  function monthLabelFromNow(months) {
+    const iso = addMonthsIso(todayKey(), months);
+    const [y, m] = iso.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+  }
+
+  function buildPayoffPlanner() {
+    const b = getBudget();
+    const debts = b.debts || [];
+    const included = [];
+    const incomplete = [];
+    (b.accounts || [])
+      .filter((a) => !a.archived && DEBT_ACCOUNT_TYPES.includes(a.type))
+      .forEach((acc) => {
+        const dbt = debts.find((d) => d.accountId === acc.id);
+        const amort = dbt ? amortizedDebtStatus(dbt) : null;
+        const balance = amort ? amort.balance : Math.abs(accountBalance(acc));
+        if (balance <= 0) return;
+        if (dbt && dbt.aprBps > 0 && dbt.minimumPaymentCents > 0) {
+          included.push({ name: acc.name, balanceCents: balance, aprBps: dbt.aprBps, minCents: dbt.minimumPaymentCents });
+        } else {
+          incomplete.push(acc);
+        }
+      });
+    if (!included.length && !incomplete.length) return null;
+
+    const strategy = (b.settings || {}).payoffStrategy === 'snowball' ? 'snowball' : 'avalanche';
+    const extraCents = (b.settings || {}).payoffExtraCents || 0;
+
+    const card = document.createElement('section');
+    card.className = 'budget-sweep budget-payoff';
+
+    const head = document.createElement('div');
+    head.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-3);width:100%;flex-wrap:wrap;';
+    const title = document.createElement('h3');
+    title.className = 'budget-sweep-title';
+    title.textContent = 'Payoff plan';
+    head.appendChild(title);
+
+    const scopeWrap = document.createElement('div');
+    scopeWrap.className = 'budget-pp-scope';
+    [['avalanche', 'Avalanche · highest APR first'], ['snowball', 'Snowball · smallest first']].forEach(([id, text]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'budget-pp-scope-btn' + (strategy === id ? ' is-active' : '');
+      btn.textContent = text;
+      btn.addEventListener('click', () => {
+        global.Pike.state.commit((d) => {
+          if (!d.budget.settings) d.budget.settings = {};
+          d.budget.settings.payoffStrategy = id;
+        });
+      });
+      scopeWrap.appendChild(btn);
+    });
+    head.appendChild(scopeWrap);
+    card.appendChild(head);
+
+    // Extra-per-month control — the "what if" lever.
+    const extraWrap = document.createElement('label');
+    extraWrap.className = 'budget-payoff-extra';
+    const extraLbl = document.createElement('span');
+    extraLbl.textContent = 'Extra toward debt each month';
+    const extraInput = document.createElement('input');
+    extraInput.type = 'text';
+    extraInput.inputMode = 'decimal';
+    extraInput.className = 'input';
+    extraInput.value = extraCents ? inputValueFromCents(extraCents) : '';
+    extraInput.placeholder = '0.00';
+    extraInput.addEventListener('change', () => {
+      const cents = Math.max(0, centsFromInput(extraInput.value));
+      global.Pike.state.commit((d) => {
+        if (!d.budget.settings) d.budget.settings = {};
+        d.budget.settings.payoffExtraCents = cents;
+      });
+    });
+    extraWrap.appendChild(extraLbl);
+    extraWrap.appendChild(extraInput);
+    card.appendChild(extraWrap);
+
+    if (included.length) {
+      const plan = simulatePayoff(included, extraCents, strategy);
+      const baseline = extraCents > 0 ? simulatePayoff(included, 0, strategy) : null;
+
+      const headline = document.createElement('p');
+      headline.className = 'budget-sweep-amount';
+      headline.textContent = plan.finished
+        ? `Debt-free ${monthLabelFromNow(plan.months)}`
+        : 'Minimums don’t cover the interest — add an extra amount';
+      card.appendChild(headline);
+
+      const sub = document.createElement('p');
+      sub.className = 'budget-sweep-line';
+      let subText = `${formatCents(plan.totalInterestCents)} interest on this path · minimums ${formatCents(included.reduce((s, d) => s + d.minCents, 0))}/mo`;
+      if (baseline && baseline.finished && plan.finished) {
+        const monthsSooner = baseline.months - plan.months;
+        const saved = baseline.totalInterestCents - plan.totalInterestCents;
+        subText += ` · vs no extra: ${monthsSooner} month${monthsSooner === 1 ? '' : 's'} sooner, ${formatCents(saved)} interest saved`;
+      }
+      sub.textContent = subText;
+      card.appendChild(sub);
+
+      const list = document.createElement('div');
+      list.className = 'budget-top-cats-list';
+      list.style.width = '100%';
+      plan.perDebt.forEach((d, i) => {
+        const row = document.createElement('div');
+        row.className = 'budget-top-cats-row';
+        const nameEl = document.createElement('span');
+        nameEl.className = 'budget-top-cats-name';
+        nameEl.textContent = `${i + 1}. ${d.name}`;
+        const right = document.createElement('div');
+        right.className = 'budget-top-cats-right';
+        const amt = document.createElement('span');
+        amt.className = 'budget-top-cats-spent';
+        amt.textContent = d.payoffMonth ? `paid off ${monthLabelFromNow(d.payoffMonth)}` : 'not reached';
+        const subEl = document.createElement('span');
+        subEl.className = 'budget-top-cats-sub';
+        subEl.textContent = `${formatCents(d.startCents)} · ${(d.aprBps / 100).toFixed(2)}%`;
+        right.appendChild(amt);
+        right.appendChild(subEl);
+        row.appendChild(nameEl);
+        row.appendChild(right);
+        list.appendChild(row);
+      });
+      card.appendChild(list);
+    }
+
+    if (incomplete.length) {
+      const note = document.createElement('p');
+      note.className = 'budget-sweep-line';
+      note.textContent = 'Not in the plan yet — each needs an APR and minimum (from its statement):';
+      card.appendChild(note);
+      incomplete.forEach((acc) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);width:100%;';
+        const nm = document.createElement('span');
+        nm.className = 'budget-top-cats-sub';
+        nm.textContent = `${acc.name} · ${formatCents(Math.abs(accountBalance(acc)))}`;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'budget-action-btn';
+        btn.textContent = 'Add details';
+        btn.addEventListener('click', () => openDebtModal(null, acc.id));
+        row.appendChild(nm);
+        row.appendChild(btn);
+        card.appendChild(row);
+      });
+    }
+
+    return card;
+  }
+
+  // ── Category trends ──────────────────────────────────────────────────────────
+  // Month-over-month net spending per category for the last six calendar
+  // months. Every cell links to its exact transaction list.
+  function buildTrendsView() {
+    const b = getBudget();
+
+    const monthKeys = [];
+    let [ty, tm] = todayKey().slice(0, 7).split('-').map(Number);
+    for (let i = 0; i < 6; i++) {
+      monthKeys.unshift(`${ty}-${pad2(tm)}`);
+      tm -= 1;
+      if (tm < 1) { tm = 12; ty -= 1; }
+    }
+    const periods = monthKeys.map((ym) => monthAsPeriod(ym));
+
+    const excluded = excludedFromSpendingCatIds();
+    let rows = (b.categories || [])
+      .filter((c) => !excluded.has(c.id))
+      .map((c) => {
+        const cells = periods.map((p) => categorySpentInPeriod(c.id, p));
+        return { id: c.id, name: c.name, cells, total: cells.reduce((s, v) => s + v, 0) };
+      })
+      .filter((r) => r.cells.some((v) => v !== 0))
+      .sort((a, b2) => b2.total - a.total);
+
+    // Uncategorized net spend per month — same rule as the period breakdown.
+    const uncatCells = periods.map((p) => {
+      let cents = 0;
+      (b.transactions || []).forEach((t) => {
+        if (t.plaidRemoved || t.transferPairId) return;
+        if (t.date < p.startDate || t.date > p.endDate) return;
+        if (t.kind === 'transfer' || t.kind === 'debt-payment') return;
+        if (t.categoryId || (Array.isArray(t.splits) && t.splits.length)) return;
+        if (t.kind === 'spending' && t.direction === 'outflow') cents += t.amountCents || 0;
+        else if (t.kind === 'refund' && t.direction === 'inflow') cents -= t.amountCents || 0;
+      });
+      return cents;
+    });
+    if (uncatCells.some((v) => v !== 0)) {
+      rows.push({
+        id: 'uncategorized', name: 'Uncategorized',
+        cells: uncatCells, total: uncatCells.reduce((s, v) => s + v, 0),
+      });
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'budget-trends';
+    if (!rows.length) {
+      const empty = document.createElement('p');
+      empty.className = 'budget-focus-blurb';
+      empty.textContent = 'No categorized spending yet — trends appear once a month or two of transactions are in.';
+      wrap.appendChild(empty);
+      return wrap;
+    }
+
+    const MAX_ROWS = 12;
+    const top = rows.slice(0, MAX_ROWS);
+    const rest = rows.slice(MAX_ROWS);
+    if (rest.length) {
+      top.push({
+        id: null, name: `Everything else (${rest.length})`,
+        cells: periods.map((_, i) => rest.reduce((s, r) => s + r.cells[i], 0)),
+        total: rest.reduce((s, r) => s + r.total, 0),
+      });
+    }
+
+    const fmtCell = (cents) => {
+      if (!cents) return '—';
+      const dollars = Math.round(Math.abs(cents) / 100).toLocaleString();
+      return (cents < 0 ? '+$' : '$') + dollars;
+    };
+    const monthShort = (ym) => {
+      const [y, m] = ym.split('-').map(Number);
+      const name = new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'short' });
+      return m === 1 ? `${name} ’${String(y).slice(2)}` : name;
+    };
+
+    const scroller = document.createElement('div');
+    scroller.className = 'budget-trends-scroll';
+    const grid = document.createElement('div');
+    grid.className = 'budget-trends-grid';
+    grid.style.gridTemplateColumns = `minmax(112px, 1.4fr) repeat(${periods.length}, minmax(72px, 1fr))`;
+
+    const corner = document.createElement('div');
+    corner.className = 'budget-trends-head is-name';
+    corner.textContent = 'Category';
+    grid.appendChild(corner);
+    monthKeys.forEach((ym) => {
+      const h = document.createElement('div');
+      h.className = 'budget-trends-head';
+      h.textContent = monthShort(ym);
+      grid.appendChild(h);
+    });
+
+    top.forEach((r) => {
+      const nameEl = document.createElement('div');
+      nameEl.className = 'budget-trends-name';
+      nameEl.textContent = r.name;
+      grid.appendChild(nameEl);
+      const rowMax = Math.max(...r.cells.map((v) => Math.max(v, 0)), 1);
+      r.cells.forEach((cents, i) => {
+        const clickable = r.id !== null;
+        const cell = document.createElement(clickable ? 'button' : 'div');
+        cell.className = 'budget-trends-cell';
+        if (clickable) {
+          cell.type = 'button';
+          cell.title = `${r.name} · ${periods[i].label}`;
+          cell.addEventListener('click', () => {
+            if (r.id === 'uncategorized') {
+              gotoTransactionsFiltered(null, 'month:' + monthKeys[i]);
+              txFilter = 'uncategorized';
+              render();
+            } else {
+              gotoTransactionsFiltered(r.id, 'month:' + monthKeys[i]);
+            }
+          });
+        }
+        const amt = document.createElement('span');
+        amt.className = 'budget-trends-amt' + (cents ? '' : ' is-zero');
+        amt.textContent = fmtCell(cents);
+        cell.appendChild(amt);
+        const bar = document.createElement('span');
+        bar.className = 'budget-trends-bar';
+        bar.style.width = cents > 0 ? `${Math.max(6, Math.round((cents / rowMax) * 100))}%` : '0';
+        cell.appendChild(bar);
+        grid.appendChild(cell);
+      });
+    });
+
+    const totalName = document.createElement('div');
+    totalName.className = 'budget-trends-name is-total';
+    totalName.textContent = 'Total spending';
+    grid.appendChild(totalName);
+    periods.forEach((p) => {
+      const cell = document.createElement('div');
+      cell.className = 'budget-trends-cell is-total';
+      const amt = document.createElement('span');
+      amt.className = 'budget-trends-amt';
+      amt.textContent = fmtCell(periodSpendingCents(p));
+      cell.appendChild(amt);
+      grid.appendChild(cell);
+    });
+
+    scroller.appendChild(grid);
+    wrap.appendChild(scroller);
+
+    const hint = document.createElement('p');
+    hint.className = 'budget-trends-hint';
+    hint.textContent = 'Net of refunds · fees & interest excluded · biggest six-month categories first';
+    wrap.appendChild(hint);
+
+    return wrap;
+  }
+
   function unassignedTxnCount() {
     const periods = getBudget().payPeriods || [];
     if (!periods.length) return 0;
@@ -1733,7 +2083,9 @@
     const view = VIEWS.find((v) => v.id === viewId)
       || (viewId === 'rules'
         ? { id: 'rules', title: 'Rules', blurb: 'Auto-categorization for imported transactions. Higher priority wins when several rules match.' }
-        : { id: viewId, title: viewId, blurb: '' });
+        : viewId === 'trends'
+          ? { id: 'trends', title: 'Trends', blurb: 'Where the money went, month over month. Tap any cell for its transactions.' }
+          : { id: viewId, title: viewId, blurb: '' });
 
     const wrap = document.createElement('div');
     wrap.className = 'budget-focus budget-focus-' + viewId;
@@ -1776,6 +2128,7 @@
     else if (viewId === 'transactions') body.appendChild(buildTransactionsView());
     else if (viewId === 'recurring')    body.appendChild(buildRecurringView());
     else if (viewId === 'rules')        body.appendChild(buildRulesView());
+    else if (viewId === 'trends')       body.appendChild(buildTrendsView());
     else                                body.appendChild(buildPlaceholder());
     wrap.appendChild(body);
 
@@ -1805,6 +2158,16 @@
 
     const addLabel = addLabels[viewId];
     if (!addLabel) return null;
+
+    // Pay periods view gets the month-over-month Trends drill-in.
+    if (viewId === 'payperiods') {
+      const trendsBtn = document.createElement('button');
+      trendsBtn.type = 'button';
+      trendsBtn.className = 'btn btn-ghost btn-sm';
+      trendsBtn.textContent = 'Trends';
+      trendsBtn.addEventListener('click', () => gotoView('trends'));
+      wrap.appendChild(trendsBtn);
+    }
 
     // Transactions view also gets "+ Transfer" and the Rules manager.
     if (viewId === 'transactions') {
@@ -2255,6 +2618,10 @@
       return (x.acc ? x.acc.name : '').localeCompare(y.acc ? y.acc.name : '');
     });
     rows.forEach(({ acc, dbt }) => wrap.appendChild(buildDebtRow(dbt, acc)));
+
+    const planner = buildPayoffPlanner();
+    if (planner) wrap.appendChild(planner);
+
     return wrap;
   }
 

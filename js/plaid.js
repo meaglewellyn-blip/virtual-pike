@@ -73,6 +73,30 @@
 
   // ── Schema mappers ────────────────────────────────────────────────────────────
 
+  // Plaid merchant names arrive truncated or shouty ("Instacar",
+  // "WWW.TANGO.AI", "Wispr Wisprflow.ai"). Canonical fixups first (lowercase
+  // contains-match), then a generic tidy. Descriptions stay raw, so
+  // keyword rules keep matching either way.
+  const MERCHANT_FIXUPS = [
+    ['instacar',        'Instacart'],
+    ['wisprflow',       'Wispr Flow'],
+    ['tango',           'Tango.ai'],
+    ['perplexity',      'Perplexity'],
+    ['doordashdashpa',  'DoorDash DashPass'],
+    ['dashpa',          'DoorDash DashPass'],
+    ['wasabisus',       'Wasabi Sushi'],
+    ['wasabius',        'Wasabi Sushi'],
+  ];
+
+  function cleanMerchant(name) {
+    if (!name) return name;
+    const lower = name.toLowerCase();
+    for (const [key, canonical] of MERCHANT_FIXUPS) {
+      if (lower.includes(key)) return canonical;
+    }
+    return name.replace(/^www\./i, '').replace(/\s{2,}/g, ' ').trim();
+  }
+
   function mapAccountType(plaidType, plaidSubtype) {
     if (plaidType === 'credit') return 'credit-card';
     if (plaidType === 'loan')   return 'loan';
@@ -658,7 +682,7 @@
         if (!accountId) return;
         const amountCents = Math.round(Math.abs(t.amount) * 100);
         const direction   = t.amount > 0 ? 'outflow' : 'inflow';
-        const merchant    = t.merchant_name || t.name || '';
+        const merchant    = cleanMerchant(t.merchant_name || t.name || '');
         const description = t.name || '';
         const rule        = matchRule(merchant, description, rules);
         d.budget.transactions.push({
