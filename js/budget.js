@@ -1435,14 +1435,26 @@
       const toCome = group.items.reduce(
         (sum, { bill, date }) => sum + (occurrencePaidTxn(bill, date) ? 0 : (bill.amountCents || 0)), 0
       );
+      // Section header styled like the dashboard stat blocks: the subtotal is
+      // the prominent number, the label sits quietly beneath it — fintech
+      // clarity in Pike's clothing.
       const subhead = document.createElement('div');
       subhead.className = 'budget-upcoming-subhead';
       const lbl = document.createElement('span');
+      lbl.className = 'budget-upcoming-subhead-label';
       lbl.textContent = group.label;
+      const right = document.createElement('div');
+      right.className = 'budget-upcoming-subhead-right';
       const amt = document.createElement('span');
-      amt.textContent = toCome > 0 ? `≈${formatCents(toCome)} to come` : 'all paid ✓';
+      amt.className = 'budget-upcoming-subhead-amt' + (toCome > 0 ? '' : ' is-paid');
+      amt.textContent = toCome > 0 ? `≈${formatCents(toCome)}` : 'All paid ✓';
+      const cap = document.createElement('span');
+      cap.className = 'budget-upcoming-subhead-cap';
+      cap.textContent = toCome > 0 ? 'still to come' : 'nothing left this stretch';
+      right.appendChild(amt);
+      right.appendChild(cap);
       subhead.appendChild(lbl);
-      subhead.appendChild(amt);
+      subhead.appendChild(right);
       tile.appendChild(subhead);
 
       const list = document.createElement('div');

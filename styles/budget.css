@@ -1447,19 +1447,55 @@
 
 .budget-upcoming-subhead {
   display: flex;
-  align-items: baseline;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-top: var(--space-2);
-  font: var(--fw-medium) var(--fs-xs)/1 var(--font-body);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
 }
 
 .budget-upcoming-subhead:first-of-type {
   margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.budget-upcoming-subhead-label {
+  font: var(--fw-medium) var(--fs-xs)/1.4 var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding-bottom: 3px;
+}
+
+.budget-upcoming-subhead-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.budget-upcoming-subhead-amt {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--fs-lg);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.budget-upcoming-subhead-amt.is-paid {
+  color: var(--success, #7d9471);
+  font-size: var(--fs-md, 17px);
+}
+
+.budget-upcoming-subhead-cap {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 
 /* ── Pending (unposted) imported transactions ──────────────────────────────── */
