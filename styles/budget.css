@@ -1659,3 +1659,83 @@ button.budget-trends-cell:hover .budget-trends-amt {
   font-size: var(--fs-xs);
   color: var(--text-faint);
 }
+
+/* ── Payoff plan: cascade timeline ─────────────────────────────────────────── */
+
+.budget-payoff-explain {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  margin-top: calc(-1 * var(--space-2));
+}
+
+.budget-payoff-timeline {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.budget-payoff-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.budget-payoff-row-name {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.budget-payoff-row-date {
+  font-family: var(--font-body);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-sm);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.budget-payoff-row-date.is-stuck {
+  color: var(--warning);
+}
+
+.budget-payoff-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-soft);
+  margin: var(--space-2) 0;
+  overflow: hidden;
+}
+
+.budget-payoff-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--sage);
+  opacity: 0.8;
+}
+
+.budget-payoff-row-date.is-stuck + .budget-payoff-track .budget-payoff-fill,
+.budget-payoff-row:has(.is-stuck) .budget-payoff-fill {
+  background: var(--warning);
+  opacity: 0.4;
+}
+
+.budget-payoff-story {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.budget-payoff-facts {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}

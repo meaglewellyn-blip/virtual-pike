@@ -558,7 +558,7 @@
   // the highest APR first (mathematically optimal); snowball kills the
   // smallest balance first (motivationally optimal). Pure function.
   function simulatePayoff(debtsIn, extraCents, strategy) {
-    const debts = debtsIn.map((d) => ({ ...d, bal: d.balanceCents, payoffMonth: null }));
+    const debts = debtsIn.map((d) => ({ ...d, bal: d.balanceCents, payoffMonth: null, payLog: [] }));
     const order = debts.slice().sort((a, b2) => strategy === 'snowball'
       ? a.bal - b2.bal
       : b2.aprBps - a.aprBps);
@@ -568,12 +568,13 @@
       month++;
       let attack = extraCents;
       debts.forEach((d) => {
-        if (d.bal <= 0) { attack += d.minCents; return; }
+        if (d.bal <= 0) { attack += d.minCents; d.payLog.push(0); return; }
         const interest = Math.round(d.bal * (d.aprBps / 10000) / 12);
         d.bal += interest;
         totalInterest += interest;
         const pay = Math.min(d.bal, d.minCents);
         d.bal -= pay;
+        d.payLog.push(pay);
       });
       for (const target of order) {
         if (attack <= 0) break;
@@ -581,15 +582,34 @@
         const pay = Math.min(target.bal, attack);
         target.bal -= pay;
         attack -= pay;
+        target.payLog[target.payLog.length - 1] += pay;
       }
       debts.forEach((d) => { if (d.bal <= 0 && d.payoffMonth == null) d.payoffMonth = month; });
     }
+
+    // Compress each debt's monthly payments into stable segments so the UI can
+    // narrate the rollover: "$400/mo → $1,064/mo from Mar 2028". The final
+    // partial payment and one-month cascade transitions are folded away.
+    const segmentsFor = (d) => {
+      const end = d.payoffMonth ? d.payoffMonth - 1 : d.payLog.length;
+      const raw = [];
+      for (let i = 0; i < end; i++) {
+        const amt = d.payLog[i];
+        if (amt <= 0) continue;
+        const last = raw[raw.length - 1];
+        if (last && Math.abs(last.amtCents - amt) <= 1) { last.months += 1; continue; }
+        raw.push({ fromMonth: i + 1, amtCents: amt, months: 1 });
+      }
+      return raw.filter((s, i) => !(s.months === 1 && i < raw.length - 1));
+    };
+
     return {
       months: month,
       totalInterestCents: totalInterest,
       perDebt: order.map((d) => ({
-        name: d.name, aprBps: d.aprBps,
+        name: d.name, aprBps: d.aprBps, minCents: d.minCents,
         startCents: d.balanceCents, payoffMonth: d.payoffMonth,
+        segments: segmentsFor(d),
       })),
       finished: !debts.some((d) => d.bal > 0),
     };
@@ -696,29 +716,81 @@
       sub.textContent = subText;
       card.appendChild(sub);
 
+      const explain = document.createElement('p');
+      explain.className = 'budget-payoff-explain';
+      explain.textContent = strategy === 'snowball'
+        ? 'Each finished debt’s payment rolls onto the smallest remaining balance — that’s why the later payoffs speed up.'
+        : 'Each finished debt’s payment rolls onto the highest remaining APR — that’s why the later payoffs speed up.';
+      card.appendChild(explain);
+
+      // Timeline: sorted by payoff date so the cascade reads top to bottom.
+      // Each row narrates its own payment schedule, naming the debt whose
+      // finish line boosted it.
+      const shortName = (n) => {
+        const first = n.split(' · ')[0].trim();
+        return first.length > 30 ? first.slice(0, 29).trimEnd() + '…' : first;
+      };
+      const maxMonth = plan.perDebt.reduce((mx, d) => Math.max(mx, d.payoffMonth || plan.months), 1);
       const list = document.createElement('div');
-      list.className = 'budget-top-cats-list';
-      list.style.width = '100%';
-      plan.perDebt.forEach((d, i) => {
-        const row = document.createElement('div');
-        row.className = 'budget-top-cats-row';
-        const nameEl = document.createElement('span');
-        nameEl.className = 'budget-top-cats-name';
-        nameEl.textContent = `${i + 1}. ${d.name}`;
-        const right = document.createElement('div');
-        right.className = 'budget-top-cats-right';
-        const amt = document.createElement('span');
-        amt.className = 'budget-top-cats-spent';
-        amt.textContent = d.payoffMonth ? `paid off ${monthLabelFromNow(d.payoffMonth)}` : 'not reached';
-        const subEl = document.createElement('span');
-        subEl.className = 'budget-top-cats-sub';
-        subEl.textContent = `${formatCents(d.startCents)} · ${(d.aprBps / 100).toFixed(2)}%`;
-        right.appendChild(amt);
-        right.appendChild(subEl);
-        row.appendChild(nameEl);
-        row.appendChild(right);
-        list.appendChild(row);
-      });
+      list.className = 'budget-payoff-timeline';
+      plan.perDebt.slice()
+        .sort((a, b2) => (a.payoffMonth || 9999) - (b2.payoffMonth || 9999))
+        .forEach((d) => {
+          const row = document.createElement('div');
+          row.className = 'budget-payoff-row';
+
+          const headRow = document.createElement('div');
+          headRow.className = 'budget-payoff-row-head';
+          const nameEl = document.createElement('span');
+          nameEl.className = 'budget-payoff-row-name';
+          nameEl.textContent = shortName(d.name);
+          nameEl.title = d.name;
+          const dateEl = document.createElement('span');
+          dateEl.className = 'budget-payoff-row-date' + (d.payoffMonth ? '' : ' is-stuck');
+          dateEl.textContent = d.payoffMonth ? monthLabelFromNow(d.payoffMonth) : 'not reached';
+          headRow.appendChild(nameEl);
+          headRow.appendChild(dateEl);
+          row.appendChild(headRow);
+
+          const track = document.createElement('div');
+          track.className = 'budget-payoff-track';
+          const fill = document.createElement('div');
+          fill.className = 'budget-payoff-fill';
+          fill.style.width = d.payoffMonth
+            ? `${Math.max(4, Math.round((d.payoffMonth / maxMonth) * 100))}%`
+            : '100%';
+          track.appendChild(fill);
+          row.appendChild(track);
+
+          const storyRow = document.createElement('div');
+          storyRow.className = 'budget-payoff-story';
+          const storyEl = document.createElement('span');
+          const fmtMo = (c) => `${formatCents(c)}/mo`;
+          if (!d.segments.length) {
+            storyEl.textContent = '';
+          } else if (d.segments.length === 1) {
+            storyEl.textContent = Math.abs(d.segments[0].amtCents - d.minCents) <= 1
+              ? `its own ${fmtMo(d.minCents)} minimum does it`
+              : `${fmtMo(d.segments[0].amtCents)} the whole way`;
+          } else {
+            storyEl.textContent = d.segments.map((s, i) => {
+              if (i === 0) return fmtMo(s.amtCents);
+              const src = plan.perDebt.find((o) =>
+                o !== d && o.payoffMonth != null && Math.abs(o.payoffMonth - (s.fromMonth - 1)) <= 1);
+              return src
+                ? `${fmtMo(s.amtCents)} once ${shortName(src.name)} is done (${monthLabelFromNow(src.payoffMonth)})`
+                : `${fmtMo(s.amtCents)} from ${monthLabelFromNow(s.fromMonth)}`;
+            }).join(' → ');
+          }
+          const factsEl = document.createElement('span');
+          factsEl.className = 'budget-payoff-facts';
+          factsEl.textContent = `${formatCents(d.startCents)} · ${(d.aprBps / 100).toFixed(2)}%`;
+          storyRow.appendChild(storyEl);
+          storyRow.appendChild(factsEl);
+          row.appendChild(storyRow);
+
+          list.appendChild(row);
+        });
       card.appendChild(list);
     }
 
