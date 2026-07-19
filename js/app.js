@@ -148,10 +148,15 @@
   function wireSyncIndicator() {
     const dot = document.getElementById('sync-dot');
     const label = document.getElementById('sync-label');
+    // The timestamp is the anti-zombie tell: a surface whose "Synced" time is
+    // hours old (or missing entirely — pre-v74 code) is showing frozen data.
+    function stamp() {
+      return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
     function update(mode) {
       if (!dot || !label) return;
       dot.classList.remove('is-online', 'is-syncing', 'is-local');
-      if (mode === 'online')  { dot.classList.add('is-online');  label.textContent = 'Synced'; }
+      if (mode === 'online')  { dot.classList.add('is-online');  label.textContent = `Synced · ${stamp()}`; }
       else if (mode === 'syncing') { dot.classList.add('is-syncing'); label.textContent = 'Syncing…'; }
       else                    { dot.classList.add('is-local');   label.textContent = 'Local only'; }
     }
