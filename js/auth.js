@@ -92,6 +92,40 @@
     });
   }
 
+  // Version tag + refresh on the login screen. The version shown is the
+  // service worker's ACTIVE cache name (e.g. "pike-v80") — what this device
+  // is actually running, not what the server last deployed — so a frozen
+  // device identifies itself at a glance. The button forces a service-worker
+  // update check and reloads: the closest thing a home-screen PWA has to a
+  // hard refresh.
+  function wireGateFooter() {
+    const verEl = document.getElementById('pike-gate-version');
+    const btn = document.getElementById('pike-gate-refresh');
+    if (verEl && typeof caches !== 'undefined' && caches.keys) {
+      caches.keys()
+        .then((keys) => {
+          const pike = keys.filter((k) => /^pike-v\d+$/.test(k))
+            .sort((a, b) => parseInt(a.slice(6), 10) - parseInt(b.slice(6), 10))
+            .pop();
+          verEl.textContent = pike || 'first load';
+        })
+        .catch(() => { verEl.textContent = ''; });
+    }
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        btn.textContent = 'Refreshing…';
+        btn.disabled = true;
+        try {
+          if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map((r) => r.update().catch(() => {})));
+          }
+        } catch (_) {}
+        window.location.reload();
+      });
+    }
+  }
+
   function init() {
     if (isUnlockedLocally()) {
       markUnlocked();
@@ -99,6 +133,7 @@
       markLocked();
     }
     wireGateUI();
+    wireGateFooter();
     // Auto-focus the username field when locked (or password if no username field)
     if (!isUnlockedLocally()) {
       const u = document.getElementById('pike-gate-username');

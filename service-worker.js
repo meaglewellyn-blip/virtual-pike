@@ -1,5 +1,5 @@
 /* Virtual Pike — minimal service worker (offline app shell) */
-const CACHE_VERSION = 'pike-v80';
+const CACHE_VERSION = 'pike-v81';
 const APP_SHELL = [
   './',
   './index.html',

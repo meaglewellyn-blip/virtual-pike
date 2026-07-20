@@ -81,3 +81,42 @@ body:not(.pike-locked) .pike-gate { display: none !important; }
   transition: background var(--dur-fast) var(--ease);
 }
 .pike-gate-button:hover { background: var(--accent-strong); }
+
+/* ── Gate footer: version tag + refresh ────────────────────────────────────── */
+
+.pike-gate-footer {
+  margin-top: var(--space-5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+#pike-gate-version {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.pike-gate-refresh {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line);
+  cursor: pointer;
+}
+
+.pike-gate-refresh:hover {
+  color: var(--text);
+}
+
+.pike-gate-refresh:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
