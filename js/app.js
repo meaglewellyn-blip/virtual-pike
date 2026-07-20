@@ -155,9 +155,16 @@
     }
     function update(mode) {
       if (!dot || !label) return;
-      dot.classList.remove('is-online', 'is-syncing', 'is-local');
+      dot.classList.remove('is-online', 'is-syncing', 'is-local', 'is-warn');
       if (mode === 'online')  { dot.classList.add('is-online');  label.textContent = `Synced · ${stamp()}`; }
       else if (mode === 'syncing') { dot.classList.add('is-syncing'); label.textContent = 'Syncing…'; }
+      else if (mode === 'degraded') {
+        // Sync could not start — what's on screen may be an old local copy.
+        // This must be unmissable: a quiet "Local only" is how a frozen
+        // device masqueraded as healthy for days.
+        dot.classList.add('is-warn');
+        label.textContent = '⚠ Not syncing — showing an old copy. Refresh.';
+      }
       else                    { dot.classList.add('is-local');   label.textContent = 'Local only'; }
     }
     update(Pike.db && Pike.db.getMode ? Pike.db.getMode() : 'local');

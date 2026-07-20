@@ -96,6 +96,8 @@
 .sync-dot.is-online  { background: var(--sage); }
 .sync-dot.is-syncing { background: var(--warning); animation: pulse 1.4s var(--ease) infinite; }
 .sync-dot.is-local   { background: var(--text-faint); }
+.sync-dot.is-warn    { background: var(--warning); animation: pulse 1.4s var(--ease) infinite; }
+.sync-dot.is-warn + #sync-label { color: var(--warning); font-weight: var(--fw-semibold); }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }

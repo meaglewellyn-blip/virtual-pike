@@ -1,5 +1,5 @@
 /* Virtual Pike — minimal service worker (offline app shell) */
-const CACHE_VERSION = 'pike-v79';
+const CACHE_VERSION = 'pike-v80';
 const APP_SHELL = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ const APP_SHELL = [
   './styles/auth.css',
   './styles/plaid.css',
   './styles/settings.css',
+  './js/vendor/supabase.min.js',
   './js/auth.js',
   './js/state.js',
   './js/router.js',

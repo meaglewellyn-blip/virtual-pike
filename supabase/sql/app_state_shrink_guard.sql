@@ -1,19 +1,26 @@
--- Shrink guard for app_state: rejects stale-device wholesale overwrites.
+-- Write guards for app_state: rejects stale-device wholesale overwrites.
+-- v2 (2026-07-20): adds the pushStamp fence on top of the shrink checks.
 --
--- Pathology (four incidents, 2026-07-11/12): a resumed PWA running frozen
--- day-old code+data pushes its entire stale blob, silently reverting
--- everything newer. Such writes always SHRINK several sections at once
--- (missing days of synced transactions, quotes, rules, bills). Healthy
--- writes only ever shrink a list by one or two (a delete, an archive).
+-- Pathology (five incidents, 2026-07-11 through 2026-07-20): a device
+-- running frozen cached code and/or frozen local data pushes its entire
+-- stale blob, silently reverting everything newer. The shrink checks catch
+-- the common shape (sections losing many items at once); the pushStamp
+-- fence closes the rest of the door:
 --
--- This trigger rejects any UPDATE that shrinks a tracked section by more
--- than 3 items. The rejected client gets an error (its push fails, no data
--- lost anywhere); on next true reload it pulls fresh state.
+--   Every healthy client (db.js v10+) stamps data.meta.pushStamp with the
+--   push wall-clock time immediately before upserting. This trigger rejects
+--   any UPDATE whose blob carries no stamp, or a stamp more than 48 hours
+--   older than the server clock. A stale device re-pushing days-old data
+--   carries a days-old (or missing) stamp and is refused at the database —
+--   no matter how old its cached JavaScript is, because old code cannot
+--   fake a field it has never heard of.
 --
--- Escape hatch for intentional mass deletion:
+-- Escape hatch for intentional maintenance writes:
 --   alter table public.app_state disable trigger app_state_shrink_guard;
 --   ... do the write ...
 --   alter table public.app_state enable trigger app_state_shrink_guard;
+-- (Direct maintenance PATCHes should instead just include a current
+--  data.meta.pushStamp and, if shrinking, use the escape hatch.)
 
 create or replace function public.app_state_shrink_guard()
 returns trigger
@@ -23,7 +30,22 @@ declare
   s text;
   oldn int;
   newn int;
+  stamp timestamptz;
 begin
+  -- ── pushStamp fence ──────────────────────────────────────────────────
+  begin
+    stamp := (new.data->'meta'->>'pushStamp')::timestamptz;
+  exception when others then
+    stamp := null;
+  end;
+  if stamp is null then
+    raise exception 'stale write rejected: blob has no meta.pushStamp (old client code)';
+  end if;
+  if stamp < now() - interval '48 hours' then
+    raise exception 'stale write rejected: meta.pushStamp % is older than 48h', stamp;
+  end if;
+
+  -- ── shrink checks ────────────────────────────────────────────────────
   foreach s in array array['quotes','people','brainDump','tasks','reminders','trips','rhythms'] loop
     oldn := coalesce(jsonb_array_length(old.data->s), 0);
     newn := coalesce(jsonb_array_length(new.data->s), 0);

@@ -36,7 +36,8 @@
   let pushTimer = null;
   let lastPushedJson = null;
   let lastPushedAt = null;   // ISO string; set after each successful upsert
-  let mode = 'local';  // 'local' | 'syncing' | 'online'
+  let mode = 'local';  // 'local' | 'syncing' | 'online' | 'degraded'
+  let initAttempts = 0;
 
   function isConfigured() {
     return !!SUPABASE_URL && !!SUPABASE_ANON_KEY
@@ -59,9 +60,16 @@
       return;
     }
     if (!global.supabase || typeof global.supabase.createClient !== 'function') {
-      console.warn('Pike: supabase-js not loaded; falling back to local-only mode.');
-      setMode('local');
-      global.Pike.state.markHydrated('local-only');
+      // The sync library failed to load. The old behavior — silently dropping
+      // to local-only and rendering whatever stale copy localStorage holds —
+      // is exactly how a device ends up living in the past for days (the
+      // 2026-07-20 "everything reset to July 10" incident). Instead: warn
+      // loudly, keep the hydration gate closed so nothing stale can commit or
+      // push, and keep retrying.
+      initAttempts += 1;
+      console.warn(`Pike: supabase-js not loaded (attempt ${initAttempts}) — retrying.`);
+      setMode('degraded');
+      if (initAttempts < 10) setTimeout(init, 3000);
       return;
     }
     try {
@@ -126,15 +134,30 @@
         return;
       }
       if (data && data.data) {
-        // Cross-device staleness guard using the server's updated_at timestamp.
-        let lastAt = '';
-        let localDataAt = '';
-        try { lastAt = localStorage.getItem(SYNC_KEY) || ''; } catch(_) {}
-        try { localDataAt = localStorage.getItem(LOCAL_DATA_AT_KEY) || ''; } catch(_) {}
+        // ALWAYS adopt the server's copy. The old marker-based skip
+        // ("remote not newer than my last sync") trusted timestamps that
+        // devices wrote from their own wall clocks — one bad clock, or one
+        // poisoned localStorage marker, froze a device on stale data forever.
+        // The server row is the single source of truth; adopting it on every
+        // boot/wake costs one small fetch and kills that entire bug class.
+        // Sole exception: an edit committed seconds ago on THIS device that
+        // the debounced push hasn't flushed yet — don't stomp it with what
+        // would just be our own pre-edit state echoing back.
         const remoteAt = data.updated_at || '';
-        if (lastAt && remoteAt && remoteAt <= lastAt && localDataAt === lastAt) {
-          console.info('Pike: pullOnce skipped — remote row not newer than last sync',
-            { lastAt, remoteAt });
+        const sinceLocalCommit = Date.now() - (global.Pike.state.lastLocalCommitAt || 0);
+        // Identical-version check: only skip when the server row is the EXACT
+        // version this device already adopted (millisecond-equal timestamps —
+        // formats differ, so compare parsed times, never strings). Unlike the
+        // old "remote not newer" inequality, a poisoned/future marker can
+        // never satisfy equality, so a frozen device always re-adopts.
+        let localDataAt = '';
+        try { localDataAt = localStorage.getItem(LOCAL_DATA_AT_KEY) || ''; } catch(_) {}
+        const sameVersion = !!remoteAt && !!localDataAt
+          && Date.parse(remoteAt) === Date.parse(localDataAt);
+        if (sameVersion) {
+          console.info('Pike: pullOnce — already on this exact row version', { remoteAt });
+        } else if (sinceLocalCommit < REALTIME_IGNORE_AFTER_LOCAL_COMMIT_MS) {
+          console.info('Pike: pullOnce deferred — local edit in flight', { remoteAt });
         } else {
           global.Pike.state.replace(data.data);
           try { localStorage.setItem(SYNC_KEY, remoteAt); } catch(_) {}
@@ -249,8 +272,17 @@
       }
     } catch (_) { /* offline or transient — the upsert below will surface it */ }
 
-    const serialized = JSON.stringify(data);
     const pushedAt = new Date().toISOString();
+    // Stamp the blob itself with when (and roughly what) pushed it. The
+    // server-side guard rejects any write whose stamp is missing or old —
+    // which permanently locks out stale devices running frozen cached code,
+    // the root cause of every 2026-07 wipe. Old clients can't fake a field
+    // their code has never heard of.
+    data.meta = Object.assign({}, data.meta, {
+      pushStamp: pushedAt,
+      pushedBy: (navigator.userAgent || 'unknown').slice(0, 120),
+    });
+    const serialized = JSON.stringify(data);
     try {
       const { error } = await client
         .from('app_state')
