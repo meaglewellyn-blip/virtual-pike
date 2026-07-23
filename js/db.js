@@ -38,6 +38,125 @@
   let lastPushedAt = null;   // ISO string; set after each successful upsert
   let mode = 'local';  // 'local' | 'syncing' | 'online' | 'degraded'
   let initAttempts = 0;
+  let pullRetryTimer = null;
+  let pullRetryCount = 0;
+  let hadSuccessfulPull = false;
+
+  // ── Plain-fetch REST fallback ─────────────────────────────────────────────
+  // supabase-js requests have failed on at least one device (2026-07-23:
+  // iPhone frozen on stale data with current code) while plain fetch to the
+  // same host kept working — the Plaid balance calls proved it every launch.
+  // Every critical read/write therefore has a bare-fetch fallback, and the
+  // diagnostics below use bare fetch exclusively so they survive whatever
+  // kills the SDK.
+  const REST_HEADERS = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+    'Content-Type': 'application/json',
+  };
+
+  async function restSelectRow(rowId) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(rowId)}&select=data,updated_at`,
+      { headers: REST_HEADERS }
+    );
+    if (!res.ok) throw new Error('rest-select http ' + res.status);
+    const rows = await res.json();
+    return rows && rows[0] ? rows[0] : null;
+  }
+
+  async function restUpsertRow(rowId, data, pushedAt) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/app_state?id=eq.${encodeURIComponent(rowId)}`,
+      {
+        method: 'PATCH',
+        headers: Object.assign({ 'Prefer': 'return=minimal' }, REST_HEADERS),
+        body: JSON.stringify({ data, updated_at: pushedAt }),
+      }
+    );
+    if (!res.ok) throw new Error('rest-upsert http ' + res.status);
+  }
+
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, rej) => setTimeout(() => rej(new Error(label + ' timed out after ' + ms + 'ms')), ms)),
+    ]);
+  }
+
+  // ── Remote diagnostics ────────────────────────────────────────────────────
+  // Fire-and-forget rows into public.client_log so a misbehaving device can
+  // be diagnosed from anywhere instead of guessing at its console. Uses bare
+  // fetch, never throws, silently no-ops if the table doesn't exist yet.
+  function deviceId() {
+    try {
+      let id = localStorage.getItem('pike.device.id');
+      if (!id) {
+        id = 'dev-' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem('pike.device.id', id);
+      }
+      return id;
+    } catch (_) {
+      return 'ephemeral-' + Math.random().toString(36).slice(2, 8);
+    }
+  }
+  let cachedVer = '';
+  function telemetry(event, detail) {
+    const send = (ver) => {
+      try {
+        fetch(`${SUPABASE_URL}/rest/v1/client_log`, {
+          method: 'POST',
+          headers: Object.assign({ 'Prefer': 'return=minimal' }, REST_HEADERS),
+          body: JSON.stringify({
+            device: deviceId(),
+            ver: ver || '',
+            event,
+            detail: Object.assign({ ua: (navigator.userAgent || '').slice(0, 140) }, detail || {}),
+          }),
+        }).catch(() => {});
+      } catch (_) {}
+    };
+    if (cachedVer) { send(cachedVer); return; }
+    try {
+      caches.keys().then((keys) => {
+        cachedVer = keys.filter((k) => /^pike-v\d+$/.test(k))
+          .sort((a, b) => parseInt(a.slice(6), 10) - parseInt(b.slice(6), 10)).pop() || 'no-sw-cache';
+        send(cachedVer);
+      }).catch(() => send('cache-err'));
+    } catch (_) { send('cache-err'); }
+  }
+
+  function localProfile() {
+    try {
+      const d = global.Pike.state.data || {};
+      const txs = (d.budget || {}).transactions || [];
+      let lastAt = '', localDataAt = '';
+      try { lastAt = localStorage.getItem(SYNC_KEY) || ''; } catch (_) {}
+      try { localDataAt = localStorage.getItem(LOCAL_DATA_AT_KEY) || ''; } catch (_) {}
+      let storage = 'ok';
+      try {
+        localStorage.setItem('pike.storage.test', '1');
+        if (localStorage.getItem('pike.storage.test') !== '1') storage = 'readback-failed';
+        localStorage.removeItem('pike.storage.test');
+      } catch (e) { storage = 'write-failed: ' + (e && e.name); }
+      const rachel = (d.people || []).find((p) => /rachel/i.test(p && p.name || ''));
+      return {
+        txns: txs.length,
+        maxTxDate: txs.reduce((m, t) => (t.date > m ? t.date : m), ''),
+        quotes: (d.quotes || []).length,
+        brainDump: (d.brainDump || []).length,
+        rachelSobriety: rachel ? (rachel.sobrietyDate || null) : 'no-rachel',
+        lastAt, localDataAt, storage,
+        // Recent brain-dump texts ride along so items stranded on a device
+        // that could never push are recoverable from the log.
+        recentDumps: (d.brainDump || []).slice(-25).map((x) => ({
+          id: x && x.id, text: String(x && (x.text || x.title) || '').slice(0, 200), at: x && (x.createdAt || x.at),
+        })),
+      };
+    } catch (e) {
+      return { profileError: String(e).slice(0, 200) };
+    }
+  }
 
   function isConfigured() {
     return !!SUPABASE_URL && !!SUPABASE_ANON_KEY
@@ -48,6 +167,79 @@
   function setMode(next) {
     mode = next;
     document.dispatchEvent(new CustomEvent('pike:syncmode', { detail: { mode } }));
+  }
+
+  // Pull retries: one failed boot pull must never condemn a session to stale
+  // data (the 12s hydration failsafe used to do exactly that, quietly).
+  function schedulePullRetry(reason) {
+    if (pullRetryTimer) return;
+    const delays = [10000, 30000, 60000, 120000];
+    const delay = delays[Math.min(pullRetryCount, delays.length - 1)];
+    pullRetryCount += 1;
+    if (!hadSuccessfulPull) setMode('degraded');
+    telemetry('pull-retry-scheduled', { reason: String(reason).slice(0, 120), attempt: pullRetryCount, delayMs: delay });
+    pullRetryTimer = setTimeout(() => { pullRetryTimer = null; pullOnce(); }, delay);
+  }
+
+  // Read the row through whatever transport works: SDK first (8s cap),
+  // bare REST on any SDK failure.
+  async function fetchRowAnyTransport(rowId, selectCols) {
+    if (client) {
+      try {
+        const { data, error } = await withTimeout(
+          client.from('app_state').select(selectCols || 'data, updated_at').eq('id', rowId).maybeSingle(),
+          8000, 'sdk-select');
+        if (error) throw new Error('sdk-select: ' + (error.message || JSON.stringify(error)));
+        return { row: data, transport: 'sdk' };
+      } catch (e) {
+        const row = await restSelectRow(rowId);
+        telemetry('pull-sdk-failed-rest-ok', { sdkError: String(e).slice(0, 200) });
+        return { row, transport: 'rest-fallback' };
+      }
+    }
+    return { row: await restSelectRow(rowId), transport: 'rest' };
+  }
+
+  let syncStarted = false;
+  function startSyncOnce() {
+    if (syncStarted) return;
+    syncStarted = true;
+    telemetry('boot', { local: localProfile() });
+    setMode('syncing');
+    pullOnce();
+
+    // If the hydration gate opens any way other than a successful pull
+    // (12s failsafe, error path), the screen is showing an old local copy —
+    // say so loudly and keep retrying until a pull lands.
+    document.addEventListener('pike:hydrated', (e) => {
+      const outcome = e && e.detail && e.detail.outcome;
+      if (outcome !== 'hydrated' && outcome !== 'local-only' && !hadSuccessfulPull) {
+        setMode('degraded');
+        telemetry('hydration-degraded', { outcome, local: localProfile() });
+        schedulePullRetry('hydrated:' + outcome);
+      }
+    });
+
+    // Flush any pending push immediately when the PWA goes to the background
+    // or the page is about to unload; pull on every return to foreground.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && pushTimer) {
+        clearTimeout(pushTimer);
+        pushTimer = null;
+        push(global.Pike.state.data);
+      }
+      if (!document.hidden) pullOnce();
+    });
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted) pullOnce();
+    });
+    window.addEventListener('pagehide', () => {
+      if (pushTimer) {
+        clearTimeout(pushTimer);
+        pushTimer = null;
+        push(global.Pike.state.data);
+      }
+    });
   }
 
   function init() {
@@ -67,9 +259,12 @@
       // loudly, keep the hydration gate closed so nothing stale can commit or
       // push, and keep retrying.
       initAttempts += 1;
-      console.warn(`Pike: supabase-js not loaded (attempt ${initAttempts}) — retrying.`);
-      setMode('degraded');
+      console.warn(`Pike: supabase-js not loaded (attempt ${initAttempts}) — syncing over bare REST, retrying SDK.`);
+      // Data sync does not wait for the SDK — it runs over bare REST now.
+      // The SDK only adds the realtime channel, so keep retrying it quietly.
+      startSyncOnce();
       if (initAttempts < 10) setTimeout(init, 3000);
+      else telemetry('sdk-load-gave-up', {});
       return;
     }
     try {
@@ -77,62 +272,24 @@
         auth: { persistSession: false },
         realtime: { params: { eventsPerSecond: 5 } },
       });
-      setMode('online');
     } catch (e) {
-      console.warn('Pike: Supabase init failed', e);
-      setMode('local');
-      global.Pike.state.markHydrated('failed');
-      return;
+      // The SDK objected on this browser. Sync proceeds over bare REST —
+      // only the realtime channel is lost. The old behavior (silent
+      // local-only bail-out) is how a device lived on frozen data for days.
+      client = null;
+      console.warn('Pike: Supabase client init failed — continuing on bare REST', e);
+      telemetry('createclient-threw', { error: String(e).slice(0, 200) });
     }
-    // pullOnce signals hydration when it resolves. subscribe() runs in parallel.
-    pullOnce();
-    subscribe();
-
-    // Flush any pending push immediately when the PWA goes to the background or
-    // the page is about to unload.  Without this, a change made within
-    // PUSH_DEBOUNCE_MS of switching apps never reaches Supabase; on the next
-    // boot pullOnce() finds remoteAt > lastAt (the push that would have updated
-    // lastAt never ran) and calls state.replace() — overwriting the mobile edit.
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && pushTimer) {
-        clearTimeout(pushTimer);
-        pushTimer = null;
-        push(global.Pike.state.data);
-      }
-      // Coming BACK to the foreground: a resumed PWA holds frozen in-memory
-      // state, its realtime socket is often dead, and its next commit would
-      // push that stale snapshot over everything newer (the 2026-07-12
-      // morning wipe). Pull first — pullOnce() is a no-op when the remote
-      // row isn't newer, so this is cheap on every wake.
-      if (!document.hidden) pullOnce();
-    });
-    window.addEventListener('pageshow', (e) => {
-      if (e.persisted) pullOnce();  // bfcache restore = same stale-resume risk
-    });
-    window.addEventListener('pagehide', () => {
-      if (pushTimer) {
-        clearTimeout(pushTimer);
-        pushTimer = null;
-        push(global.Pike.state.data);
-      }
-    });
+    if (client) subscribe();
+    startSyncOnce();
   }
 
   async function pullOnce() {
     console.info('Pike[telemetry]: hydration-start');
-    if (!client) { global.Pike.state.markHydrated('failed'); console.warn('Pike[telemetry]: hydration-failed (no client)'); return; }
     const rowId = global.Pike.state.rowId;
     try {
-      const { data, error } = await client
-        .from('app_state')
-        .select('data, updated_at')
-        .eq('id', rowId)
-        .maybeSingle();
-      if (error) {
-        console.warn('Pike[telemetry]: hydration-failed', error);
-        global.Pike.state.markHydrated('failed');
-        return;
-      }
+      const { row, transport } = await fetchRowAnyTransport(rowId);
+      const data = row;
       if (data && data.data) {
         // ALWAYS adopt the server's copy. The old marker-based skip
         // ("remote not newer than my last sync") trusted timestamps that
@@ -168,20 +325,37 @@
         // hydration so queued init commits can flush.
         global.Pike.state.setBaselineSizes(global.Pike.state.getCurrentSizes(global.Pike.state.data));
         global.Pike.state.markHydrated('hydrated');
-        console.info('Pike[telemetry]: hydration-success', { remoteAt, sizes: global.Pike.state.getCurrentSizes(global.Pike.state.data) });
+        hadSuccessfulPull = true;
+        pullRetryCount = 0;
+        if (pullRetryTimer) { clearTimeout(pullRetryTimer); pullRetryTimer = null; }
+        setMode('online');
+        console.info('Pike[telemetry]: hydration-success', { remoteAt, transport });
+        telemetry('pull-ok', { transport, remoteAt, sameVersion, local: localProfile() });
         // Take a snapshot of the newly-hydrated state so we always have at
         // least one fresh good copy in the ring after each successful sync.
         try { global.Pike.state.createSnapshot('pull'); } catch (_) {}
       } else {
-        // Row genuinely does not exist yet — first boot on a brand-new project.
-        // Allow init seeds to proceed and create the row on first push.
-        console.info('Pike[telemetry]: hydration-no-row (first-boot mode)');
-        global.Pike.state.setBaselineSizes(global.Pike.state.getCurrentSizes(global.Pike.state.data));
-        global.Pike.state.markHydrated('no-row');
+        // No row came back. On a brand-new project that's first boot; on an
+        // established install (this one) it means the read path is lying —
+        // NEVER open first-boot seeding against real local data.
+        const prof = localProfile();
+        const looksFirstBoot = !prof.txns && !prof.quotes && !prof.brainDump;
+        telemetry('pull-no-row', { transport, looksFirstBoot, local: prof });
+        if (looksFirstBoot) {
+          console.info('Pike[telemetry]: hydration-no-row (first-boot mode)');
+          global.Pike.state.setBaselineSizes(global.Pike.state.getCurrentSizes(global.Pike.state.data));
+          global.Pike.state.markHydrated('no-row');
+        } else {
+          console.warn('Pike[telemetry]: hydration-no-row on an established install — treating as failure');
+          global.Pike.state.markHydrated('failed');
+          schedulePullRetry('no-row');
+        }
       }
     } catch (e) {
       console.warn('Pike[telemetry]: hydration-threw', e);
+      telemetry('pull-failed', { error: String(e).slice(0, 300) });
       global.Pike.state.markHydrated('failed');
+      schedulePullRetry(e);
     }
   }
 
@@ -220,13 +394,13 @@
   }
 
   function schedulePush(data) {
-    if (!client) return;
+    if (!isConfigured()) return;
     clearTimeout(pushTimer);
     pushTimer = setTimeout(() => push(data), PUSH_DEBOUNCE_MS);
   }
 
   async function push(data) {
-    if (!client) return;
+    if (!isConfigured()) return;
 
     // ── Shrinkage guard ───────────────────────────────────────────────────
     // Pre-flight sanity check. If a tracked collection just dropped from
@@ -257,13 +431,14 @@
       let lastAt = '';
       try { lastAt = localStorage.getItem(SYNC_KEY) || ''; } catch (_) {}
       if (lastAt) {
-        const { data: head } = await client
-          .from('app_state')
-          .select('updated_at')
-          .eq('id', rowId)
-          .maybeSingle();
-        if (head && head.updated_at && head.updated_at > lastAt) {
+        let headAt = null;
+        try {
+          const { row } = await fetchRowAnyTransport(rowId, 'updated_at');
+          headAt = row && row.updated_at;
+        } catch (_) { /* transient — the upsert below will surface it */ }
+        if (headAt && headAt > lastAt) {
           console.warn('Pike[telemetry]: push-refused — remote row is newer than this device\'s last sync. Pulling fresh state; redo the last edit if it disappears.');
+          telemetry('push-refused-remote-newer', { lastAt, headAt });
           document.dispatchEvent(new CustomEvent('pike:push-refused', { detail: { reasons: ['remote-newer-than-local-sync'] } }));
           setMode('online');
           await pullOnce();
@@ -283,11 +458,31 @@
       pushedBy: (navigator.userAgent || 'unknown').slice(0, 120),
     });
     const serialized = JSON.stringify(data);
+    let transport = 'sdk';
     try {
-      const { error } = await client
-        .from('app_state')
-        .upsert({ id: rowId, data, updated_at: pushedAt });
-      if (error) { console.warn('Pike[telemetry]: push-network-failed', error); setMode('online'); return; }
+      let sdkErr = null;
+      if (client) {
+        try {
+          const { error } = await withTimeout(
+            client.from('app_state').upsert({ id: rowId, data, updated_at: pushedAt }),
+            10000, 'sdk-upsert');
+          if (error) sdkErr = new Error(error.message || JSON.stringify(error));
+        } catch (e) { sdkErr = e; }
+      } else {
+        sdkErr = new Error('no sdk client');
+      }
+      if (sdkErr) {
+        transport = 'rest-fallback';
+        try {
+          await restUpsertRow(rowId, data, pushedAt);
+          telemetry('push-sdk-failed-rest-ok', { sdkError: String(sdkErr).slice(0, 200) });
+        } catch (e2) {
+          console.warn('Pike[telemetry]: push-network-failed', sdkErr, e2);
+          telemetry('push-failed', { sdk: String(sdkErr).slice(0, 200), rest: String(e2).slice(0, 200) });
+          setMode('online');
+          return;
+        }
+      }
       lastPushedJson = serialized;
       lastPushedAt   = pushedAt;
       // Advance the local sync marker so the next pullOnce() doesn't re-apply
@@ -298,7 +493,8 @@
       // what we just successfully pushed — not the pre-push snapshot.
       global.Pike.state.setBaselineSizes(global.Pike.state.getCurrentSizes(data));
       setMode('online');
-      console.info('Pike[telemetry]: push-accepted', { pushedAt, bytes: serialized.length });
+      console.info('Pike[telemetry]: push-accepted', { pushedAt, bytes: serialized.length, transport });
+      telemetry('push-accepted', { pushedAt, bytes: serialized.length, transport });
       // Snapshot after every successful push so the ring always reflects the
       // last known good remote-confirmed state.
       try { global.Pike.state.createSnapshot('push'); } catch (_) {}
