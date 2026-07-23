@@ -208,6 +208,33 @@
     setMode('syncing');
     pullOnce();
 
+    // Zombie-tab defense. iOS never really closes tabs: a Pike tab loaded
+    // weeks ago can resume with weeks-old code and stomp shared localStorage
+    // (the July ghost). Every boot stamps its code generation; any tab that
+    // later sees a newer stamp reloads itself instead of running old code.
+    const GEN_KEY = 'pike.code.gen';
+    let myGen = 0;
+    try {
+      caches.keys().then((keys) => {
+        myGen = Math.max(0, ...keys.filter((k) => /^pike-v\d+$/.test(k)).map((k) => parseInt(k.slice(6), 10)));
+        try {
+          const stored = parseInt(localStorage.getItem(GEN_KEY) || '0', 10);
+          if (myGen >= stored) localStorage.setItem(GEN_KEY, String(myGen));
+        } catch (_) {}
+      }).catch(() => {});
+    } catch (_) {}
+    const reloadIfSuperseded = () => {
+      try {
+        const stored = parseInt(localStorage.getItem(GEN_KEY) || '0', 10);
+        if (myGen && stored > myGen) {
+          telemetry('zombie-reload', { myGen, stored });
+          setTimeout(() => window.location.reload(), 400);
+        }
+      } catch (_) {}
+    };
+    window.addEventListener('storage', (e) => { if (e && e.key === GEN_KEY) reloadIfSuperseded(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reloadIfSuperseded(); });
+
     // If the hydration gate opens any way other than a successful pull
     // (12s failsafe, error path), the screen is showing an old local copy —
     // say so loudly and keep retrying until a pull lands.
@@ -302,17 +329,17 @@
         // would just be our own pre-edit state echoing back.
         const remoteAt = data.updated_at || '';
         const sinceLocalCommit = Date.now() - (global.Pike.state.lastLocalCommitAt || 0);
-        // Identical-version check: only skip when the server row is the EXACT
-        // version this device already adopted (millisecond-equal timestamps —
-        // formats differ, so compare parsed times, never strings). Unlike the
-        // old "remote not newer" inequality, a poisoned/future marker can
-        // never satisfy equality, so a frozen device always re-adopts.
-        let localDataAt = '';
-        try { localDataAt = localStorage.getItem(LOCAL_DATA_AT_KEY) || ''; } catch(_) {}
-        const sameVersion = !!remoteAt && !!localDataAt
-          && Date.parse(remoteAt) === Date.parse(localDataAt);
-        if (sameVersion) {
-          console.info('Pike: pullOnce — already on this exact row version', { remoteAt });
+        // Adopt-unless-identical, judged by CONTENT — never by markers. The
+        // frozen iPhone (2026-07-23) proved markers can lie: a zombie tab
+        // loaded weeks earlier rewrites shared localStorage with its old
+        // snapshot without touching the sync markers, so "marker equals row
+        // version" claimed fresh while the data underneath was July 10.
+        // Serializing the blob costs ~10ms; a wrong skip costs days.
+        const sameContent = JSON.stringify(data.data) === JSON.stringify(global.Pike.state.data);
+        if (sameContent) {
+          console.info('Pike: pullOnce — content identical', { remoteAt });
+          try { localStorage.setItem(SYNC_KEY, remoteAt); } catch(_) {}
+          try { localStorage.setItem(LOCAL_DATA_AT_KEY, remoteAt); } catch(_) {}
         } else if (sinceLocalCommit < REALTIME_IGNORE_AFTER_LOCAL_COMMIT_MS) {
           console.info('Pike: pullOnce deferred — local edit in flight', { remoteAt });
         } else {
@@ -330,7 +357,7 @@
         if (pullRetryTimer) { clearTimeout(pullRetryTimer); pullRetryTimer = null; }
         setMode('online');
         console.info('Pike[telemetry]: hydration-success', { remoteAt, transport });
-        telemetry('pull-ok', { transport, remoteAt, sameVersion, local: localProfile() });
+        telemetry('pull-ok', { transport, remoteAt, sameContent, local: localProfile() });
         // Take a snapshot of the newly-hydrated state so we always have at
         // least one fresh good copy in the ring after each successful sync.
         try { global.Pike.state.createSnapshot('pull'); } catch (_) {}
